@@ -4,20 +4,20 @@ export type TransactionType = 'expense' | 'income';
 export interface Account {
   id: string;
   name: string;
-  type: string; // Changed to string for customizability
+  type: string;
   initialBalance: number;
   color: string;
-  isLiability?: boolean; // 是否为负债账户
-  repaymentMonths?: number; // 预计还款周期（月）
-  isSavings?: boolean; // 是否为攒钱账户
-  savingsMonths?: number; // 预计攒钱周期（月）
+  isLiability?: boolean;
+  repaymentMonths?: number;
+  isSavings?: boolean;
+  savingsMonths?: number;
 }
 
 export interface Transaction {
   id: string;
   amount: number;
   category: string;
-  accountId: string; // Linked to Account.id
+  accountId: string;
   note: string;
   date: string;
   type: TransactionType;
@@ -25,7 +25,9 @@ export interface Transaction {
 
 export interface Budget {
   category: string;
-  limit: number;
+  limit: number; // 默认为月预算
+  dailyLimit?: number;
+  yearlyLimit?: number;
 }
 
 export interface CategoryInfo {

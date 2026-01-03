@@ -2,6 +2,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, Budget, FinancialInsight } from "../types";
 
+// Fix: Upgraded to gemini-3-pro-preview for complex financial reasoning tasks.
 export const getFinancialInsights = async (
   transactions: Transaction[],
   budgets: Budget[]
@@ -26,7 +27,7 @@ export const getFinancialInsights = async (
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3-pro-preview",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -43,7 +44,8 @@ export const getFinancialInsights = async (
     });
 
     if (response.text) {
-      return JSON.parse(response.text.trim());
+      // Fix: Added explicit type casting for JSON.parse to ensure type safety.
+      return JSON.parse(response.text.trim()) as FinancialInsight;
     }
     return null;
   } catch (error) {

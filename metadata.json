@@ -1,5 +1,5 @@
 {
   "name": "ZenBudget - 智能记账理财",
-  "description": "一个美观且功能强大的智能记账与预算管理工具，集成 Gemini AI 提供个性化财务洞察与建议。",
+  "description": "一个美观且功能强大的记账与预算管理工具，基于锤子便签风格设计。",
   "requestFramePermissions": []
 }
