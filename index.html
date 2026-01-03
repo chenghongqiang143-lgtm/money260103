@@ -1,0 +1,60 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZenBudget - 锤子便签风</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --hammer-bg: #f4f1ea;
+            --hammer-paper: #fafafa;
+            --hammer-border: #e0ddd5;
+            --hammer-text: #4a4a4a;
+        }
+        body {
+            font-family: 'Inter', 'PingFang SC', "Microsoft YaHei", sans-serif;
+            background-color: var(--hammer-bg);
+            color: var(--hammer-text);
+        }
+        .hammer-card {
+            background-color: var(--hammer-paper);
+            border: 1px solid var(--hammer-border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 4px 12px rgba(0,0,0,0.03);
+            border-radius: 4px;
+        }
+        .hammer-header {
+            background: linear-gradient(to bottom, #ffffff, #f9f9f9);
+            border-bottom: 1px solid var(--hammer-border);
+        }
+        .hammer-stitch {
+            border-top: 1px dashed var(--hammer-border);
+        }
+        .paper-texture {
+            background-image: url("https://www.transparenttextures.com/patterns/natural-paper.png");
+        }
+        input:focus {
+            outline: none;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1cfc8; border-radius: 10px; }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "recharts": "https://esm.sh/recharts@^3.6.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0"
+  }
+}
+</script>
+</head>
+<body class="paper-texture">
+    <div id="root"></div>
+</body>
+</html>
