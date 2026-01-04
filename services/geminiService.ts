@@ -2,12 +2,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, Budget, FinancialInsight } from "../types";
 
-// Fix: Upgraded to gemini-3-pro-preview for complex financial reasoning tasks.
+// Using gemini-3-pro-preview for complex financial reasoning tasks as per guidelines.
 export const getFinancialInsights = async (
   transactions: Transaction[],
   budgets: Budget[]
 ): Promise<FinancialInsight | null> => {
   try {
+    // API key is obtained exclusively from process.env.API_KEY.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const summary = transactions.reduce((acc, t) => {
@@ -26,6 +27,7 @@ export const getFinancialInsights = async (
       请提供一段简短的分析，包括一个核心建议(tip)，一段现状分析(analysis)，和一个具体的行动方案(recommendation)。
     `;
 
+    // Calling generateContent with the model name and parameters directly.
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: prompt,
@@ -43,9 +45,10 @@ export const getFinancialInsights = async (
       },
     });
 
-    if (response.text) {
-      // Fix: Added explicit type casting for JSON.parse to ensure type safety.
-      return JSON.parse(response.text.trim()) as FinancialInsight;
+    // Extracting generated text content by accessing the .text property.
+    const text = response.text;
+    if (text) {
+      return JSON.parse(text.trim()) as FinancialInsight;
     }
     return null;
   } catch (error) {

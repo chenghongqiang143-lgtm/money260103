@@ -5,7 +5,8 @@ import {
   ChevronsLeft, ChevronsRight, ChevronDown, TrendingUp, Settings, 
   Wallet, CreditCard, Landmark, Coins, PlusCircle, 
   Pencil, RefreshCw, BarChart, List, BadgePercent, GripVertical, 
-  Settings2, Palette, PlusSquare, Save, FileUp, Calendar as CalendarIcon
+  Settings2, Palette, PlusSquare, Save, FileUp, Calendar as CalendarIcon,
+  AlertCircle, Target, Tag
 } from 'lucide-react';
 import { Transaction, Budget, CategoryInfo, Account } from './types';
 import { CATEGORIES as INITIAL_CATEGORIES, getIcon } from './constants';
@@ -43,7 +44,9 @@ const COLOR_MAP: Record<string, string> = {
   'bg-gray-400': '#9ca3af',
 };
 
-const getAccountIcon = (type: string) => {
+const getAccountIcon = (type: string, isLiability?: boolean, isSavings?: boolean) => {
+  if (isLiability) return <AlertCircle size={18} />;
+  if (isSavings) return <Target size={18} />;
   switch (type) {
     case '现金': return <Wallet size={18} />;
     case '第三方支付': return <CreditCard size={18} />;
@@ -62,9 +65,14 @@ const App: React.FC = () => {
   const [expandedBudgetCategory, setExpandedBudgetCategory] = useState<string | null>(null);
   const [isAssetStatsVisible, setIsAssetStatsVisible] = useState(false);
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<CategoryInfo | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState('');
+  const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
   
   const [confirmDeleteTxId, setConfirmDeleteTxId] = useState<string | null>(null);
   const [confirmDeleteAccId, setConfirmDeleteAccId] = useState<string | null>(null);
+  const [confirmDeleteCatId, setConfirmDeleteCatId] = useState<string | null>(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   
   const [dashboardMonth, setDashboardMonth] = useState(() => {
@@ -133,6 +141,7 @@ const App: React.FC = () => {
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
 
   const [amount, setAmount] = useState('');
   const [categoryName, setCategoryName] = useState(categories[0]?.name || '');
@@ -147,6 +156,7 @@ const App: React.FC = () => {
   const [accColor, setAccColor] = useState(PRESET_COLORS[0]);
   const [accIsLiability, setAccIsLiability] = useState(false);
   const [accIsSavings, setAccIsSavings] = useState(false);
+  const [accPeriod, setAccPeriod] = useState('12');
 
   const openAddAccount = () => {
     setEditingAccount(null);
@@ -156,6 +166,7 @@ const App: React.FC = () => {
     setAccColor(PRESET_COLORS[0]);
     setAccIsLiability(false);
     setAccIsSavings(false);
+    setAccPeriod('12');
     setIsAccountModalOpen(true);
   };
 
@@ -174,8 +185,7 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('zen_enable_budget_accumulation', JSON.stringify(enableBudgetAccumulation)); }, [enableBudgetAccumulation]);
   useEffect(() => { localStorage.setItem('zen_enable_excess_deduction', JSON.stringify(enableExcessDeduction)); }, [enableExcessDeduction]);
 
-  // Fix: Explicitly typed memo for account balances to prevent inference issues
-  const accountBalances = useMemo(() => {
+  const accountBalances = useMemo<(Account & { currentBalance: number })[]>(() => {
     return accounts.map(acc => {
       const accTransactions = transactions.filter(t => t.accountId === acc.id);
       const balance = accTransactions.reduce((sum, t) => {
@@ -216,7 +226,6 @@ const App: React.FC = () => {
       });
   }, [transactions, dashboardMonth]);
 
-  // Fix: Explicit return type for periodStats memo to prevent "unknown" inference in JSX
   const periodStats = useMemo(() => {
     const start = new Date(startDate); start.setHours(0,0,0,0);
     const end = new Date(endDate); end.setHours(23,59,59,999);
@@ -253,16 +262,10 @@ const App: React.FC = () => {
       categoryData, 
       trendData,
       stackedData: [{ name: '支出占比', ...categoryData.reduce((acc, curr) => ({...acc, [curr.name]: curr.value}), {} as Record<string, number>) }] 
-    } as {
-      income: number;
-      expense: number;
-      categoryData: { name: string; value: number; color: string }[];
-      trendData: { date: string; income: number; expense: number }[];
-      stackedData: any[];
     };
   }, [transactions, categories, startDate, endDate]);
 
-  const activeTrendData = useMemo(() => {
+  const activeTrendData = useMemo<{ date: string; value: number }[]>(() => {
     const dates: {date: string, value: number}[] = [];
     const today = new Date();
     const count = assetTrendPeriod === '1m' ? 30 : (assetTrendPeriod === '3m' ? 90 : 12);
@@ -335,7 +338,17 @@ const App: React.FC = () => {
 
   const handleSaveAccount = (e: React.FormEvent) => {
     e.preventDefault();
-    const newAcc: Account = { id: editingAccount?.id || Date.now().toString(), name: accName, type: accType, initialBalance: Number(accInitialBalance), color: accColor, isLiability: accIsLiability, isSavings: accIsSavings };
+    const newAcc: Account = { 
+      id: editingAccount?.id || Date.now().toString(), 
+      name: accName, 
+      type: accType, 
+      initialBalance: Number(accInitialBalance), 
+      color: accColor, 
+      isLiability: accIsLiability, 
+      isSavings: accIsSavings,
+      repaymentMonths: accIsLiability ? Number(accPeriod) : undefined,
+      savingsMonths: accIsSavings ? Number(accPeriod) : undefined
+    };
     if (editingAccount) setAccounts(accounts.map(a => a.id === editingAccount.id ? newAcc : a));
     else setAccounts([...accounts, newAcc]);
     setIsAccountModalOpen(false); setEditingAccount(null);
@@ -406,6 +419,7 @@ const App: React.FC = () => {
   const clearConfirmStates = () => {
     setConfirmDeleteTxId(null);
     setConfirmDeleteAccId(null);
+    setConfirmDeleteCatId(null);
     setConfirmClearAll(false);
   };
 
@@ -424,14 +438,68 @@ const App: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const imported = JSON.parse(event.target?.result as string) as any;
-        if (imported.transactions) setTransactions(imported.transactions);
-        if (imported.budgets) setBudgets(imported.budgets);
-        if (imported.accounts) setAccounts(imported.accounts);
-        alert('恢复成功！');
+        const result = event.target?.result;
+        if (typeof result !== 'string') return;
+        const importedData = JSON.parse(result) as any;
+        if (importedData && typeof importedData === 'object') {
+          if (importedData.transactions && Array.isArray(importedData.transactions)) setTransactions(importedData.transactions);
+          if (importedData.budgets && Array.isArray(importedData.budgets)) setBudgets(importedData.budgets);
+          if (importedData.accounts && Array.isArray(importedData.accounts)) setAccounts(importedData.accounts);
+          if (importedData.accountTypes && Array.isArray(importedData.accountTypes)) setAccountTypes(importedData.accountTypes);
+          if (importedData.categories && Array.isArray(importedData.categories)) setCategories(importedData.categories);
+          alert('恢复成功！');
+        } else {
+          throw new Error('Invalid data format');
+        }
       } catch (err) { alert('无效文件'); }
     };
     reader.readAsText(file);
+  };
+
+  const handleSaveCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editCategoryName) return;
+    
+    if (editingCategory) {
+      const oldName = editingCategory.name;
+      const newName = editCategoryName;
+      setCategories(categories.map(c => c.id === editingCategory.id ? { ...c, name: newName } : c));
+      setBudgets(budgets.map(b => b.category === oldName ? { ...b, category: newName } : b));
+      setTransactions(transactions.map(t => t.category === oldName ? { ...t, category: newName } : t));
+      if (categoryName === oldName) setCategoryName(newName);
+    } else {
+      const newCat: CategoryInfo = {
+        id: Date.now().toString(),
+        name: editCategoryName,
+        icon: 'MoreHorizontal',
+        color: 'bg-gray-400'
+      };
+      setCategories([...categories, newCat]);
+    }
+    setEditingCategory(null);
+    setEditCategoryName('');
+    setShowEditCategoryModal(false);
+  };
+
+  const onDragStart = (index: number) => setDraggedItemIndex(index);
+  const onDragOver = (e: React.DragEvent) => e.preventDefault();
+
+  const handleDropCategories = (index: number) => {
+    if (draggedItemIndex === null) return;
+    const updated = [...categories];
+    const [removed] = updated.splice(draggedItemIndex, 1);
+    updated.splice(index, 0, removed);
+    setCategories(updated);
+    setDraggedItemIndex(null);
+  };
+
+  const handleDropAccounts = (index: number) => {
+    if (draggedItemIndex === null) return;
+    const updated = [...accounts];
+    const [removed] = updated.splice(draggedItemIndex, 1);
+    updated.splice(index, 0, removed);
+    setAccounts(updated);
+    setDraggedItemIndex(null);
   };
 
   const handleClearAllData = () => {
@@ -462,7 +530,7 @@ const App: React.FC = () => {
             </div>
             
             <StatsCards income={monthlyStats.income} expense={monthlyStats.expense} monthLabel={`${parseInt(dashboardMonth.split('-')[1])}月`} />
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               <div className="lg:col-span-8 space-y-6">
                 <div className="hammer-card p-6">
@@ -537,7 +605,7 @@ const App: React.FC = () => {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0eee8" />
                     <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#999', fontSize: 9}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#999', fontSize: 9}} width={40} />
+                    <YAxis axisLine={false} tickLine={false} width={40} tick={{fill: '#999', fontSize: 9}} />
                     <Tooltip contentStyle={{ borderRadius: '4px', border: '1px solid #e0ddd5', fontSize: '10px' }} />
                     <Area type="monotone" name="收入" dataKey="income" stroke="#468847" strokeWidth={2} fillOpacity={1} fill="url(#colorInc)" />
                     <Area type="monotone" name="支出" dataKey="expense" stroke="#7d513d" strokeWidth={2} fillOpacity={1} fill="url(#colorExp)" />
@@ -590,57 +658,72 @@ const App: React.FC = () => {
                       <span className="text-[10px] font-bold text-[#666] truncate uppercase">{cat.name}</span>
                     </div>
                     <p className="text-sm font-mono font-bold text-[#333]">¥{cat.value.toLocaleString()}</p>
-                    <p className="text-[8px] text-[#ccc] font-bold">占比 {((cat.value / periodStats.expense) * 100).toFixed(1)}%</p>
+                    <p className="text-[8px] text-[#ccc] font-bold">占比 {((cat.value / (periodStats.expense || 1)) * 100).toFixed(1)}%</p>
                   </div>
                 ))}
               </div>
             </div>
           </div>
         ) : activeTab === 'assets' ? (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Top Balance Block Restored to Original Background and Color */}
-            <div className="hammer-card p-6 bg-[#7d513d] text-white relative h-32 flex items-end justify-between shadow-xl overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-10">
-                <Wallet size={120} />
+          <div className="space-y-3 animate-in fade-in duration-300">
+            <div className="hammer-card p-6 bg-[#7d513d] text-white relative h-44 flex flex-col justify-between shadow-2xl overflow-hidden">
+              <div className="absolute top-[-20px] right-[-20px] opacity-10 pointer-events-none rotate-12">
+                <Wallet size={180} />
               </div>
               <div className="z-10">
-                <p className="text-[10px] font-bold uppercase opacity-60 mb-1 tracking-[0.2em]">净资产</p>
-                <h2 className="text-3xl font-light">
-                  <span className="text-lg font-serif italic opacity-40 mr-1">¥</span>
+                <p className="text-[10px] font-bold uppercase opacity-60 mb-2 tracking-[0.4em]">净资产汇总 (结余)</p>
+                <h2 className="text-5xl font-light tracking-tight flex items-baseline">
+                  <span className="text-2xl mr-2 opacity-50 select-none">¥</span>
                   {totalAssets.toLocaleString()}
                 </h2>
               </div>
-              <div className="flex gap-2 z-10">
-                <button onClick={(e) => { e.stopPropagation(); setIsAccountManagerOpen(true); }} className="bg-white/10 text-white p-2 rounded hover:bg-white/20 transition-all"><List size={20} /></button>
-                <button onClick={(e) => { e.stopPropagation(); setAnalyzingAccount(null); setIsAssetStatsVisible(true); }} className="bg-white/10 text-white p-2 rounded hover:bg-white/20 transition-all"><BarChart size={20} /></button>
+              <div className="flex justify-end gap-3 z-10 w-full">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setIsAccountManagerOpen(true); }} 
+                  className="bg-white/15 text-white px-4 py-2 rounded text-[10px] font-bold uppercase flex items-center gap-2 hover:bg-white/25 transition-all active:scale-95 border border-white/10 backdrop-blur-sm"
+                >
+                  <List size={14} /> 账户管理
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setAnalyzingAccount(null); setIsAssetStatsVisible(true); }} 
+                  className="bg-white/15 text-white px-4 py-2 rounded text-[10px] font-bold uppercase flex items-center gap-2 hover:bg-white/25 transition-all active:scale-95 border border-white/10 backdrop-blur-sm"
+                >
+                  <BarChart size={14} /> 趋势统计
+                </button>
               </div>
             </div>
             
-            <div className="space-y-8">
-               {Object.entries(groupedAccounts).map(([type, accs], typeIdx) => (
-                 <div key={type} className="space-y-4">
-                    {/* Visual dashed divider with increased prominence */}
-                    {typeIdx !== 0 && (
-                      <div className="hammer-stitch w-full opacity-40 my-6"></div>
-                    )}
-                    <div className="flex items-center gap-2 px-1 mb-2">
-                       <div className="w-1 h-3 bg-[#7d513d]/30"></div>
-                       <h3 className="text-[10px] font-bold text-[#999] uppercase tracking-[0.2em]">{type}</h3>
+            <div className="space-y-3">
+               {Object.entries(groupedAccounts).map(([type, accs]) => (
+                 <div key={type} className="space-y-1.5">
+                    <div className="flex items-center gap-2 px-1">
+                       <div className="w-1 h-2.5 bg-[#7d513d]/40"></div>
+                       <h3 className="text-[9px] font-bold text-[#999] uppercase tracking-[0.2em]">{type}</h3>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                       {accs.map(acc => (
-                        <div key={acc.id} className="hammer-card p-5 relative transition-shadow hover:shadow-md" style={{ borderBottom: `2px solid ${acc.color}` }}>
-                          <button onClick={(e) => { e.stopPropagation(); setAnalyzingAccount(acc); setIsAssetStatsVisible(true); }} className="absolute top-4 right-4 p-1.5 text-[#ccc] hover:text-[#7d513d] hover:bg-[#f9f9f9] rounded-full transition-all">
-                            <TrendingUp size={16} />
+                        <div key={acc.id} className="hammer-card p-3 relative transition-shadow hover:shadow-md" style={{ borderBottom: `2px solid ${acc.color}` }}>
+                          <button onClick={(e) => { e.stopPropagation(); setAnalyzingAccount(acc); setIsAssetStatsVisible(true); }} className="absolute top-2 right-2 p-1 text-[#ccc] hover:text-[#7d513d] transition-all">
+                            <TrendingUp size={12} />
                           </button>
-                          <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 rounded border border-[#e0ddd5] flex items-center justify-center text-white" style={{ backgroundColor: acc.color }}>{getAccountIcon(acc.type)}</div>
-                            <div><h4 className="text-sm font-bold text-[#333]">{acc.name}</h4><p className="text-[10px] text-[#999] font-bold uppercase tracking-widest">{acc.type}</p></div>
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <div className="w-7 h-7 rounded border border-[#e0ddd5] flex items-center justify-center text-white" style={{ backgroundColor: acc.color }}>
+                              {React.cloneElement(getAccountIcon(acc.type, acc.isLiability, acc.isSavings) as React.ReactElement, { size: 14 })}
+                            </div>
+                            <div className="truncate flex-1">
+                                <h4 className="text-[11px] font-bold text-[#333] truncate leading-tight">{acc.name}</h4>
+                                {(acc.isLiability || acc.isSavings) && (
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                      <span className={`text-[7px] px-1 rounded-sm text-white font-bold uppercase ${acc.isLiability ? 'bg-[#b94a48]' : 'bg-[#7d513d]'}`}>
+                                        {acc.isLiability ? `${acc.repaymentMonths}M 还款` : `${acc.savingsMonths}M 攒钱`}
+                                      </span>
+                                    </div>
+                                )}
+                            </div>
                           </div>
                           <div onClick={(e) => { e.stopPropagation(); setIsEditBalanceModalOpen(acc); setManualBalanceValue(acc.currentBalance.toString()); }} className="cursor-pointer group">
-                            <p className={`text-xl font-mono font-bold ${acc.isLiability ? 'text-[#b94a48]' : 'text-[#333]'} group-hover:text-[#7d513d] transition-colors`}>
-                              <span className="text-xs mr-1 opacity-40 font-sans italic">¥</span>{Math.abs(acc.currentBalance).toLocaleString()}
-                              <Pencil size={10} className="inline ml-2 opacity-0 group-hover:opacity-40" />
+                            <p className={`text-sm font-mono font-bold ${acc.isLiability ? 'text-[#b94a48]' : 'text-[#333]'} group-hover:text-[#7d513d] transition-colors`}>
+                              <span className="text-[10px] mr-0.5 opacity-40">¥</span>{Math.abs(acc.currentBalance).toLocaleString()}
                             </p>
                           </div>
                         </div>
@@ -648,9 +731,8 @@ const App: React.FC = () => {
                     </div>
                  </div>
                ))}
-               <div className="hammer-stitch pt-6 opacity-40"></div>
-               <div className="pt-2">
-                 <button onClick={(e) => { e.stopPropagation(); openAddAccount(); }} className="w-full hammer-card p-5 border-2 border-dashed border-[#e0ddd5] bg-transparent flex flex-col items-center justify-center gap-2 text-[#999] hover:text-[#7d513d] transition-all"><PlusCircle size={24} /><span className="text-[10px] font-bold uppercase">新增资产账户</span></button>
+               <div className="pt-1">
+                 <button onClick={(e) => { e.stopPropagation(); openAddAccount(); }} className="w-full hammer-card p-3.5 border-2 border-dashed border-[#e0ddd5] bg-transparent flex flex-col items-center justify-center gap-1.5 text-[#999] hover:text-[#7d513d] transition-all active:scale-98"><PlusCircle size={20} /><span className="text-[9px] font-bold uppercase tracking-widest">新增资产账户</span></button>
                </div>
             </div>
           </div>
@@ -659,6 +741,22 @@ const App: React.FC = () => {
              <div className="hammer-card overflow-hidden shadow-sm">
               <div className="p-4 bg-[#f9f9f9] border-b border-[#e0ddd5] flex items-center gap-2"><Settings size={14} className="text-[#7d513d]" /><h3 className="text-xs font-bold text-[#333] uppercase tracking-widest">基础设置</h3></div>
               <div className="p-6 flex items-center justify-between"><div><p className="text-sm font-bold text-[#333]">账户余额联动</p><p className="text-[10px] text-[#999] mt-1">记账时同步更新关联账户的余额</p></div><button onClick={(e) => { e.stopPropagation(); setEnableAccountLinking(!enableAccountLinking); }} className={`w-10 h-5 rounded-full p-0.5 transition-all ${enableAccountLinking ? 'bg-[#7d513d]' : 'bg-[#e0ddd5]'}`}><div className={`w-4 h-4 rounded-full bg-white transform transition-transform ${enableAccountLinking ? 'translate-x-5' : ''}`}></div></button></div>
+            </div>
+
+            <div className="hammer-card overflow-hidden shadow-sm">
+              <div className="p-4 bg-[#f9f9f9] border-b border-[#e0ddd5] flex items-center gap-2"><Tag size={14} className="text-[#7d513d]" /><h3 className="text-xs font-bold text-[#333] uppercase tracking-widest">内容管理</h3></div>
+              <div className="p-6 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-[#333]">收支分类管理</p>
+                  <p className="text-[10px] text-[#999] mt-1">编辑分类名称或管理已有分类</p>
+                </div>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setIsCategoryManagerOpen(true); }} 
+                  className="px-4 py-2 border border-[#7d513d] text-[#7d513d] rounded text-[10px] font-bold uppercase hover:bg-[#7d513d] hover:text-white transition-all"
+                >
+                  进入管理
+                </button>
+              </div>
             </div>
 
             <div className="hammer-card overflow-hidden shadow-sm">
@@ -684,16 +782,17 @@ const App: React.FC = () => {
         <button onClick={(e) => { e.stopPropagation(); setActiveTab('settings'); }} className={`flex flex-col items-center gap-1.5 flex-1 transition-colors ${activeTab === 'settings' ? 'text-[#7d513d]' : 'text-[#999]'}`}><Settings size={20} /><span className="text-[9px] font-bold uppercase">设置</span></button>
       </nav>
 
+      {/* 新增交易弹窗 */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
-          <div className="bg-[#fafafa] w-full max-w-sm rounded border border-[#e0ddd5] shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
+          <div className="bg-[#fafafa] w-full max-sm:w-[95%] max-w-sm rounded border border-[#e0ddd5] shadow-2xl p-6" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6"><h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#333]">新增交易</h2><button onClick={() => setIsModalOpen(false)}><X size={24} className="text-[#ccc]" /></button></div>
             <form onSubmit={handleAddTransaction} className="space-y-6">
               <div className="flex p-1 bg-[#f0eee8] rounded border border-[#e0ddd5]">
                 <button type="button" onClick={() => setType('expense')} className={`flex-1 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${type === 'expense' ? 'bg-white text-[#333]' : 'text-[#999]'}`}>支出</button>
                 <button type="button" onClick={() => setType('income')} className={`flex-1 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${type === 'income' ? 'bg-white text-[#468847]' : 'text-[#999]'}`}>收入</button>
               </div>
-              <div className="border-b border-[#e0ddd5] pb-2 flex items-baseline"><span className="text-[#ccc] text-lg font-serif italic mr-2">¥</span><input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" autoFocus className="bg-transparent text-4xl font-light w-full outline-none font-mono" /></div>
+              <div className="border-b border-[#e0ddd5] pb-2 flex items-baseline"><span className="text-[#ccc] text-lg mr-2 select-none">¥</span><input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" autoFocus className="bg-transparent text-4xl font-light w-full outline-none font-mono" /></div>
               
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-[#999] uppercase tracking-widest flex items-center gap-1">
@@ -705,8 +804,7 @@ const App: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-[#999] uppercase tracking-widest">分类</label>
                 <div className="grid grid-cols-4 gap-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
-                    {/* Fix: Explicit check for categories to handle any potential unknown state, though typed at definition */}
-                    {(categories as CategoryInfo[]).map(cat => (
+                    {(categories as CategoryInfo[]).map((cat: CategoryInfo) => (
                         <button key={cat.id} type="button" onClick={() => setCategoryName(cat.name)} className={`p-2 rounded border flex flex-col items-center gap-1.5 transition-all ${categoryName === cat.name ? 'border-[#7d513d] bg-[#fdfaf5]' : 'border-transparent opacity-60'}`}>
                             <div className="w-10 h-10 border rounded flex items-center justify-center bg-white text-[#7d513d] shadow-sm">{getIcon(cat.icon, 'w-4 h-4')}</div>
                             <span className="text-[8px] font-bold truncate w-full text-center uppercase tracking-tighter">{cat.name}</span>
@@ -726,19 +824,118 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Asset Trend Modal */}
+      {/* 分类管理弹窗 */}
+      {isCategoryManagerOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsCategoryManagerOpen(false)}>
+          <div className="bg-[#fafafa] w-full max-w-sm rounded shadow-2xl border border-[#e0ddd5] flex flex-col max-h-[70vh]" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#e0ddd5] bg-white flex justify-between items-center">
+              <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#333]">收支分类管理</h2>
+              <button onClick={() => setIsCategoryManagerOpen(false)}><X size={24} className="text-[#ccc]" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+              {categories.map((cat) => (
+                <div key={cat.id} className="flex items-center justify-between p-2 border border-[#e0ddd5] rounded bg-white shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded border border-[#e0ddd5] flex items-center justify-center bg-[#f9f9f9] text-[#7d513d]">
+                      {getIcon(cat.icon, 'w-4 h-4')}
+                    </div>
+                    <p className="text-xs font-bold text-[#333]">{cat.name}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => { setEditingCategory(cat); setEditCategoryName(cat.name); setShowEditCategoryModal(true); }} className="p-1.5 text-[#ccc] hover:text-[#7d513d]"><Pencil size={14} /></button>
+                    <button 
+                      onClick={() => { if (confirmDeleteCatId === cat.id) { setCategories(categories.filter(c => c.id !== cat.id)); setConfirmDeleteCatId(null); } else { clearConfirmStates(); setConfirmDeleteCatId(cat.id); } }} 
+                      className={`delete-action p-1.5 rounded transition-all ${confirmDeleteCatId === cat.id ? 'bg-[#b94a48] text-white' : 'text-[#ccc] hover:text-[#b94a48]'}`}
+                    >
+                      {confirmDeleteCatId === cat.id ? <span className="text-[8px] font-bold px-1">确认?</span> : <Trash2 size={14} />}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button onClick={() => { setEditingCategory(null); setEditCategoryName(''); setShowEditCategoryModal(true); }} className="w-full py-2.5 border-2 border-dashed border-[#e0ddd5] rounded text-[9px] font-bold uppercase text-[#999] hover:text-[#7d513d] transition-all">
+                <Plus size={14} className="inline mr-1" />创建新分类
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 编辑/新建分类名称弹窗 - 独立控制且 z-index 更高 */}
+      {showEditCategoryModal && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => { setEditingCategory(null); setEditCategoryName(''); setShowEditCategoryModal(false); }}>
+          <div className="bg-white w-full max-w-xs rounded shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#333] mb-6">{editingCategory ? '重命名分类' : '新建分类'}</h2>
+            <form onSubmit={handleSaveCategory} className="space-y-6">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-[#999] uppercase tracking-wider">分类名称</label>
+                <input type="text" value={editCategoryName} onChange={e => setEditCategoryName(e.target.value)} required placeholder="输入分类名称" autoFocus className="w-full border-b border-[#e0ddd5] py-2 text-sm outline-none bg-transparent focus:border-[#7d513d]" />
+              </div>
+              <button type="submit" className="w-full py-4 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-[0.3em] shadow-lg">确认保存</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 流水明细弹窗 */}
+      {isHistoryVisible && (
+        <div className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setIsHistoryVisible(false)}>
+          <div className="bg-[#f4f1ea] paper-texture w-full max-w-lg max-h-[80vh] rounded shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-5 border-b border-[#e0ddd5] bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+              <h2 className="text-xs font-bold tracking-[0.3em] uppercase text-[#333]">全部流水记录</h2>
+              <button onClick={() => setIsHistoryVisible(false)} className="p-1.5 border border-[#e0ddd5] rounded-full bg-white hover:bg-gray-100 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+              <div className="space-y-1.5">
+                  {/* Added explicit cast to Transaction[] for transactions to resolve line 704 unknown type map error */}
+                  {(transactions as Transaction[]).length > 0 ? [...(transactions as Transaction[])].sort((a,b)=>new Date(b.date).getTime()-new Date(a.date).getTime()).map(t => (
+                      <div key={t.id} className="hammer-card flex items-center justify-between p-3 border-b last:border-0 border-[#f0eee8] group hover:bg-[#fafafa] transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded border border-[#e0ddd5] flex items-center justify-center text-[#7d513d] bg-white shadow-sm">
+                            {getIcon(categories.find(c => c.name === t.category)?.icon || 'MoreHorizontal', 'w-4 h-4')}
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-[#333]">{t.category}</p>
+                            <p className="text-[9px] text-[#999] flex items-center gap-1">
+                              <CalendarIcon size={10} />
+                              {new Date(t.date).toLocaleDateString()}
+                              {t.note && <span className="ml-1 opacity-60">| {t.note}</span>}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right flex items-center gap-3">
+                          <p className={`text-sm font-mono font-bold ${t.type === 'expense' ? 'text-[#333]' : 'text-[#468847]'}`}>
+                            {t.type === 'expense' ? '-' : '+'}¥{t.amount.toLocaleString()}
+                          </p>
+                          <button onClick={(e) => { e.stopPropagation(); if (confirmDeleteTxId === t.id) { setTransactions(transactions.filter(tx => tx.id !== t.id)); setConfirmDeleteTxId(null); } else { clearConfirmStates(); setConfirmDeleteTxId(t.id); } }} className="delete-action p-1 text-[#ccc] hover:text-[#b94a48] transition-colors">
+                            {confirmDeleteTxId === t.id ? <span className="text-[9px] font-bold text-[#b94a48] uppercase">确认?</span> : <Trash2 size={16} />}
+                          </button>
+                        </div>
+                      </div>
+                  )) : (<div className="py-24 text-center text-[#ccc] text-[10px] font-bold uppercase italic tracking-widest">NO DATA</div>)}
+              </div>
+            </div>
+            <div className="p-3 bg-white border-t text-center">
+              <p className="text-[8px] text-[#ccc] font-bold uppercase tracking-widest">End of History</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 资产统计弹窗 */}
       {isAssetStatsVisible && (
-        <div className="fixed inset-0 z-[150] bg-white animate-in slide-in-from-right duration-500 overflow-y-auto" onClick={() => setIsAssetStatsVisible(false)}>
-          <div className="max-w-4xl mx-auto min-h-full pb-32" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsAssetStatsVisible(false)}>
+          <div className="bg-white w-full max-w-lg rounded shadow-2xl flex flex-col h-[70vh] overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-20">
               <div className="flex flex-col">
                 <h2 className="text-xs font-bold uppercase tracking-[0.3em] text-[#333]">{analyzingAccount ? `${analyzingAccount.name} 账户走势` : '资产大盘走势'}</h2>
                 <p className="text-[10px] text-[#999] font-bold uppercase tracking-widest mt-0.5">净值数据回顾</p>
               </div>
-              <button onClick={() => setIsAssetStatsVisible(false)} className="p-2 border rounded-full"><X size={24} /></button>
+              <button onClick={() => setIsAssetStatsVisible(false)} className="p-2 border rounded-full hover:bg-gray-100 transition-colors"><X size={20} /></button>
             </div>
             
-            <div className="p-6 space-y-8">
+            <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
               <div className="flex justify-center gap-2">
                 {(['1m', '3m', '1y'] as AssetPeriod[]).map(p => (
                   <button key={p} onClick={() => setAssetTrendPeriod(p)} className={`px-4 py-1.5 rounded text-[10px] font-bold border transition-all ${assetTrendPeriod === p ? 'bg-[#7d513d] text-white border-[#7d513d]' : 'bg-white text-[#999] border-[#e0ddd5]'}`}>
@@ -747,31 +944,31 @@ const App: React.FC = () => {
                 ))}
               </div>
 
-              <div className="h-[280px] w-full hammer-card p-4 shadow-lg bg-white">
+              <div className="h-[200px] w-full hammer-card p-4 bg-white">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={activeTrendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                     <defs><linearGradient id="trendColor" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={analyzingAccount?.color || "#7d513d"} stopOpacity={0.1}/><stop offset="95%" stopColor={analyzingAccount?.color || "#7d513d"} stopOpacity={0}/></linearGradient></defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0eee8" />
                     <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#ccc', fontSize: 10}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#ccc', fontSize: 10}} width={50} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#ccc', fontSize: 10}} width={45} />
                     <Tooltip content={({ active, payload }) => active && payload && payload.length ? (<div className="bg-[#333] text-white p-2 rounded text-[10px] font-mono">¥{payload[0].value.toLocaleString()}</div>) : null} />
-                    <Area type="monotone" dataKey="value" stroke={analyzingAccount?.color || "#7d513d"} strokeWidth={3} fillOpacity={1} fill="url(#trendColor)" />
+                    <Area type="monotone" dataKey="value" stroke={analyzingAccount?.color || "#7d513d"} strokeWidth={2} fillOpacity={1} fill="url(#trendColor)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="hammer-card p-4 bg-white flex flex-col items-center gap-1">
-                  <span className="text-[10px] text-[#999] font-bold uppercase tracking-widest">峰值</span>
-                  <p className="text-lg font-mono font-bold text-[#468847]">¥{trendStats.max.toLocaleString()}</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="hammer-card p-2 bg-white flex flex-col items-center gap-1">
+                  <span className="text-[9px] text-[#999] font-bold uppercase tracking-widest">峰值</span>
+                  <p className="text-[11px] font-mono font-bold text-[#468847]">¥{trendStats.max.toLocaleString()}</p>
                 </div>
-                <div className="hammer-card p-4 bg-white flex flex-col items-center gap-1">
-                  <span className="text-[10px] text-[#999] font-bold uppercase tracking-widest">谷值</span>
-                  <p className="text-lg font-mono font-bold text-[#b94a48]">¥{trendStats.min.toLocaleString()}</p>
+                <div className="hammer-card p-2 bg-white flex flex-col items-center gap-1">
+                  <span className="text-[9px] text-[#999] font-bold uppercase tracking-widest">谷值</span>
+                  <p className="text-[11px] font-mono font-bold text-[#b94a48]">¥{trendStats.min.toLocaleString()}</p>
                 </div>
-                <div className="hammer-card p-4 bg-white flex flex-col items-center gap-1">
-                  <span className="text-[10px] text-[#999] font-bold uppercase tracking-widest">均值</span>
-                  <p className="text-lg font-mono font-bold text-[#333]">¥{trendStats.avg.toLocaleString()}</p>
+                <div className="hammer-card p-2 bg-white flex flex-col items-center gap-1">
+                  <span className="text-[9px] text-[#999] font-bold uppercase tracking-widest">均值</span>
+                  <p className="text-[11px] font-mono font-bold text-[#333]">¥{trendStats.avg.toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -779,80 +976,100 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {isEditBalanceModalOpen && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsEditBalanceModalOpen(null)}>
-          <div className="bg-white w-full max-w-sm rounded border border-[#e0ddd5] shadow-2xl p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#333]">校准余额</h2>
-                <p className="text-[10px] text-[#999] font-bold uppercase tracking-widest mt-0.5">{isEditBalanceModalOpen.name}</p>
-              </div>
-              <button onClick={() => setIsEditBalanceModalOpen(null)}><X size={24} className="text-[#ccc]" /></button>
-            </div>
-            <form onSubmit={handleUpdateBalance} className="space-y-6">
+      {/* 账户编辑/新增弹窗 */}
+      {isAccountModalOpen && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => { setIsAccountModalOpen(false); setEditingAccount(null); }}>
+          <div className="bg-white w-full max-sm:w-[95%] max-w-sm rounded shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#333] mb-6">{editingAccount ? '编辑账户' : '新增资产账户'}</h2>
+            <form onSubmit={handleSaveAccount} className="space-y-4">
+              <div className="space-y-1"><label className="text-[10px] font-bold text-[#999] uppercase">账户名称</label><input type="text" value={accName} onChange={e => setAccName(e.target.value)} required placeholder="如：备用金、房贷还款" className="w-full border-b border-[#e0ddd5] py-2 text-sm outline-none bg-transparent focus:border-[#7d513d]" /></div>
+              <div className="space-y-1"><label className="text-[10px] font-bold text-[#999] uppercase">当前余额</label><div className="flex items-baseline border-b border-[#e0ddd5] py-1"><span className="text-xs text-[#ccc] mr-1 select-none">¥</span><input type="number" step="0.01" value={accInitialBalance} onChange={e => setAccInitialBalance(e.target.value)} className="w-full text-lg font-mono outline-none bg-transparent" /></div></div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-[#999] uppercase tracking-wider">当前实际余额</label>
-                <div className="flex items-baseline gap-1 border-b border-[#e0ddd5] py-2">
-                  <span className="text-xs text-[#ccc] font-serif italic">¥</span>
-                  <input type="number" step="0.01" value={manualBalanceValue} onChange={e => setManualBalanceValue(e.target.value)} autoFocus className="w-full text-3xl font-mono font-light outline-none bg-transparent" />
-                </div>
+                <label className="text-[10px] font-bold text-[#999] uppercase">账户类型</label>
+                <select value={accType} onChange={e => setAccType(e.target.value)} className="w-full border-b border-[#e0ddd5] py-2 text-sm outline-none bg-transparent focus:border-[#7d513d]">
+                   {accountTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
               </div>
-              <button type="submit" className="w-full py-4 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-[0.3em] shadow-lg">确认修正</button>
+              
+              <div className="grid grid-cols-2 gap-3 py-1">
+                <button type="button" onClick={() => { setAccIsLiability(!accIsLiability); if(!accIsLiability) setAccIsSavings(false); }} className={`flex flex-col items-center justify-center gap-1 p-3 border rounded transition-all ${accIsLiability ? 'bg-[#b94a48] text-white border-[#b94a48]' : 'bg-white text-[#999] border-[#e0ddd5]'}`}>
+                    <AlertCircle size={16} /> <span className="text-[10px] font-bold uppercase">负债账户</span>
+                </button>
+                <button type="button" onClick={() => { setAccIsSavings(!accIsSavings); if(!accIsSavings) setAccIsLiability(false); }} className={`flex flex-col items-center justify-center gap-1 p-3 border rounded transition-all ${accIsSavings ? 'bg-[#7d513d] text-white border-[#7d513d]' : 'bg-white text-[#999] border-[#e0ddd5]'}`}>
+                    <Target size={16} /> <span className="text-[10px] font-bold uppercase">攒钱账户</span>
+                </button>
+              </div>
+
+              {(accIsLiability || accIsSavings) && (
+                <div className="space-y-2 p-3 bg-[#fdfaf5] border border-[#e0ddd5] rounded animate-in slide-in-from-top duration-300">
+                    <label className="text-[10px] font-bold text-[#7d513d] uppercase flex items-center gap-1">
+                        <CalendarIcon size={12} />
+                        {accIsLiability ? '预计还清周期 (月)' : '攒钱目标周期 (月)'}
+                    </label>
+                    <div className="flex items-center">
+                        <input 
+                          type="number" 
+                          min="1" 
+                          value={accPeriod} 
+                          onChange={e => setAccPeriod(e.target.value)} 
+                          className="w-full border-b border-[#7d513d]/30 bg-transparent py-1 text-sm font-mono font-bold outline-none focus:border-[#7d513d]"
+                          placeholder="请输入月数"
+                        />
+                        <span className="text-[10px] text-[#7d513d] ml-2 font-bold whitespace-nowrap">个月</span>
+                    </div>
+                </div>
+              )}
+
+              <div className="space-y-1"><label className="text-[10px] font-bold text-[#999] uppercase">识别色</label><div className="flex flex-wrap gap-2.5 pt-1">{PRESET_COLORS.map(c => (<button key={c} type="button" onClick={() => setAccColor(c)} className={`w-6 h-6 rounded-full border-2 transition-all ${accColor === c ? 'border-[#333] scale-110 shadow-md' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div></div>
+              <button type="submit" className="w-full py-4 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-[0.3em] shadow-lg mt-4 active:scale-95 transition-transform">保存账户</button>
             </form>
           </div>
         </div>
       )}
 
-      {isHistoryVisible && (
-        <div className="fixed inset-0 z-[150] bg-[#f4f1ea] paper-texture overflow-y-auto pt-safe" onClick={() => setIsHistoryVisible(false)}>
-          <div className="max-w-4xl mx-auto px-4 py-8 pb-32" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-8 sticky top-0 bg-[#f4f1ea]/90 backdrop-blur pb-4 border-b border-[#e0ddd5]"><h2 className="text-sm font-bold tracking-[0.4em] uppercase text-[#333]">历史记录</h2><button onClick={() => setIsHistoryVisible(false)} className="p-2 border border-[#e0ddd5] rounded-full bg-white"><X size={20} /></button></div>
-            <div className="hammer-card p-4 space-y-4">
-                {transactions.length > 0 ? [...transactions].sort((a,b)=>new Date(b.date).getTime()-new Date(a.date).getTime()).map(t => (
-                    <div key={t.id} className="flex items-center justify-between py-4 border-b last:border-0 border-[#f0eee8]">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-sm border border-[#e0ddd5] flex items-center justify-center text-[#7d513d] bg-white">{getIcon(categories.find(c => c.name === t.category)?.icon || 'MoreHorizontal', 'w-5 h-5')}</div>
-                        <div><p className="text-sm font-bold text-[#333]">{t.category}</p><p className="text-[10px] text-[#999]">{new Date(t.date).toLocaleDateString()}</p></div>
-                      </div>
-                      <div className="text-right flex items-center gap-4">
-                        <p className={`text-lg font-mono font-bold ${t.type === 'expense' ? 'text-[#333]' : 'text-[#468847]'}`}>{t.type === 'expense' ? '-' : '+'}¥{t.amount.toLocaleString()}</p>
-                        <button onClick={(e) => { e.stopPropagation(); if (confirmDeleteTxId === t.id) { setTransactions(transactions.filter(tx => tx.id !== t.id)); setConfirmDeleteTxId(null); } else { clearConfirmStates(); setConfirmDeleteTxId(t.id); } }} className="delete-action text-[#ccc] hover:text-[#b94a48] transition-colors">{confirmDeleteTxId === t.id ? <span className="text-[10px] font-bold text-[#b94a48]">确认?</span> : <Trash2 size={18} />}</button>
-                      </div>
-                    </div>
-                )) : (<div className="py-24 text-center text-[#ccc] text-xs font-bold uppercase italic">NO DATA</div>)}
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* 预算编排弹窗 */}
       {isBudgetModalOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsBudgetModalOpen(false)}>
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsBudgetModalOpen(false)}>
           <div className="bg-white w-full max-w-lg rounded shadow-2xl border border-[#e0ddd5] flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b border-[#e0ddd5] flex justify-between items-center"><h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#333]">预算编排 (年/月/日)</h2><button onClick={() => setIsBudgetModalOpen(false)}><X size={24} className="text-[#ccc]" /></button></div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f4f1ea]/20">
-              {categories.map((cat) => {
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#f4f1ea]/20 custom-scrollbar">
+              {categories.map((cat, index) => {
                 const b = budgets.find(x => x.category === cat.name);
                 const isExpanded = expandedBudgetCategory === cat.name;
                 return (
-                  <div key={cat.id} className="border border-[#e0ddd5] rounded bg-white shadow-sm overflow-hidden transition-all duration-300">
-                    <div className="p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3"><div className="w-8 h-8 rounded border border-[#e0ddd5] flex items-center justify-center bg-[#f9f9f9] text-[#7d513d]">{getIcon(cat.icon, 'w-4 h-4')}</div><span className="text-xs font-bold text-[#333]">{cat.name}</span></div>
-                      <div className="flex items-center gap-4"><div className="text-right"><p className="text-[8px] text-[#999] font-bold uppercase">当前月预算</p><p className="text-xs font-mono font-bold text-[#333]">¥{(b?.limit || 0).toLocaleString()}</p></div><button onClick={(e) => { e.stopPropagation(); setExpandedBudgetCategory(isExpanded ? null : cat.name); }} className={`p-2 transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[#7d513d]' : 'text-[#ccc]'}`}><ChevronDown size={18} /></button></div>
+                  <div 
+                    key={cat.id} 
+                    draggable 
+                    onDragStart={() => onDragStart(index)}
+                    onDragOver={onDragOver}
+                    onDrop={() => handleDropCategories(index)}
+                    className={`border border-[#e0ddd5] rounded bg-white shadow-sm overflow-hidden transition-all duration-300 ${draggedItemIndex === index ? 'opacity-30' : ''}`}
+                  >
+                    <div className="p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="cursor-grab active:cursor-grabbing text-[#ccc] hover:text-[#7d513d]"><GripVertical size={16} /></div>
+                        <div className="w-8 h-8 rounded border border-[#e0ddd5] flex items-center justify-center bg-[#f9f9f9] text-[#7d513d]">{getIcon(cat.icon, 'w-4 h-4')}</div>
+                        <span className="text-xs font-bold text-[#333]">{cat.name}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right"><p className="text-[7px] text-[#999] font-bold uppercase">月预算</p><p className="text-[10px] font-mono font-bold text-[#333]">¥{(b?.limit || 0).toLocaleString()}</p></div>
+                        <button onClick={(e) => { e.stopPropagation(); setExpandedBudgetCategory(isExpanded ? null : cat.name); }} className={`p-1.5 transition-transform duration-300 ${isExpanded ? 'rotate-180 text-[#7d513d]' : 'text-[#ccc]'}`}><ChevronDown size={14} /></button>
+                      </div>
                     </div>
                     {isExpanded && (
                       <div className="p-4 bg-[#fafafa] border-t border-[#f0eee8] space-y-4 animate-in slide-in-from-top duration-300">
                         <div className="grid grid-cols-3 gap-4">
                           <div className="space-y-1">
-                            <label className="text-[10px] text-[#999] font-bold uppercase tracking-widest block">日预算</label>
-                            <div className="flex items-baseline gap-1 border-b border-[#e0ddd5] pb-1"><span className="text-xs text-[#ccc] font-serif">¥</span><input type="number" className="w-full text-base font-mono font-bold outline-none bg-transparent" value={b?.dailyLimit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'daily', Number(e.target.value))} /></div>
+                            <label className="text-[9px] text-[#999] font-bold uppercase tracking-widest block">日</label>
+                            <div className="flex items-baseline gap-1 border-b border-[#e0ddd5] pb-1"><span className="text-[10px] text-[#ccc] select-none">¥</span><input type="number" className="w-full text-xs font-mono font-bold outline-none bg-transparent" value={b?.dailyLimit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'daily', Number(e.target.value))} /></div>
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[10px] text-[#999] font-bold uppercase tracking-widest block">月预算</label>
-                            <div className="flex items-baseline gap-1 border-b border-[#e0ddd5] pb-1"><span className="text-xs text-[#ccc] font-serif">¥</span><input type="number" className="w-full text-base font-mono font-bold outline-none bg-transparent" value={b?.limit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'monthly', Number(e.target.value))} /></div>
+                            <label className="text-[9px] text-[#999] font-bold uppercase tracking-widest block">月</label>
+                            <div className="flex items-baseline gap-1 border-b border-[#e0ddd5] pb-1"><span className="text-[10px] text-[#ccc] select-none">¥</span><input type="number" className="w-full text-xs font-mono font-bold outline-none bg-transparent" value={b?.limit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'monthly', Number(e.target.value))} /></div>
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[10px] text-[#999] font-bold uppercase tracking-widest block">年预算</label>
-                            <div className="flex items-baseline gap-1 border-b border-[#e0ddd5] pb-1"><span className="text-xs text-[#ccc] font-serif">¥</span><input type="number" className="w-full text-base font-mono font-bold outline-none bg-transparent" value={b?.yearlyLimit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'yearly', Number(e.target.value))} /></div>
+                            <label className="text-[9px] text-[#999] font-bold uppercase tracking-widest block">年</label>
+                            <div className="flex items-baseline gap-1 border-b border-[#e0ddd5] pb-1"><span className="text-[10px] text-[#ccc] select-none">¥</span><input type="number" className="w-full text-xs font-mono font-bold outline-none bg-transparent" value={b?.yearlyLimit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'yearly', Number(e.target.value))} /></div>
                           </div>
                         </div>
                       </div>
@@ -869,37 +1086,57 @@ const App: React.FC = () => {
       )}
 
       {isAccountManagerOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsAccountManagerOpen(false)}>
-          <div className="bg-[#fafafa] w-full max-sm rounded shadow-2xl border border-[#e0ddd5] flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
-            <div className="p-4 border-b border-[#e0ddd5] bg-white flex justify-between items-center"><h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#333]">资产账户</h2><button onClick={() => setIsAccountManagerOpen(false)}><X size={24} className="text-[#ccc]" /></button></div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {accounts.map((acc) => (
-                <div key={acc.id} className="flex items-center justify-between p-3 border border-[#e0ddd5] rounded bg-white shadow-sm">
-                  <div className="flex items-center gap-3"><div className="w-8 h-8 rounded border border-[#e0ddd5] flex items-center justify-center text-white" style={{ backgroundColor: acc.color }}>{getAccountIcon(acc.type)}</div><p className="text-xs font-bold text-[#333] leading-none">{acc.name}</p></div>
-                  <div className="flex items-center gap-1.5"><p className="text-xs font-mono font-bold text-[#333]">¥{acc.initialBalance.toLocaleString()}</p><button onClick={(e) => { e.stopPropagation(); if (confirmDeleteAccId === acc.id) { setAccounts(accounts.filter(a => a.id !== acc.id)); setConfirmDeleteAccId(null); } else { clearConfirmStates(); setConfirmDeleteAccId(acc.id); } }} className="delete-action p-1.5 rounded text-[#ccc] hover:text-[#b94a48]">{confirmDeleteAccId === acc.id ? <span className="text-[8px] font-bold">确认?</span> : <Trash2 size={14} />}</button></div>
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsAccountManagerOpen(false)}>
+          <div className="bg-[#fafafa] w-full max-sm:w-[95%] max-w-sm rounded shadow-2xl border border-[#e0ddd5] flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-[#e0ddd5] bg-white flex justify-between items-center"><h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#333]">资产排序与管理</h2><button onClick={() => setIsAccountManagerOpen(false)}><X size={24} className="text-[#ccc]" /></button></div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+              {accounts.map((acc, index) => (
+                <div 
+                    key={acc.id} 
+                    draggable
+                    onDragStart={() => onDragStart(index)}
+                    onDragOver={onDragOver}
+                    onDrop={() => handleDropAccounts(index)}
+                    className={`flex items-center justify-between p-2 border border-[#e0ddd5] rounded bg-white shadow-sm transition-all ${draggedItemIndex === index ? 'opacity-30' : ''}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="cursor-grab active:cursor-grabbing text-[#ccc] hover:text-[#7d513d]"><GripVertical size={16} /></div>
+                    <div className="w-7 h-7 rounded border border-[#e0ddd5] flex items-center justify-center text-white" style={{ backgroundColor: acc.color }}>
+                        {React.cloneElement(getAccountIcon(acc.type, acc.isLiability, acc.isSavings) as React.ReactElement, { size: 14 })}
+                    </div>
+                    <p className="text-[11px] font-bold text-[#333] leading-none">{acc.name}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] font-mono font-bold text-[#333]">¥{acc.initialBalance.toLocaleString()}</p>
+                    <button onClick={(e) => { e.stopPropagation(); if (confirmDeleteAccId === acc.id) { setAccounts(accounts.filter(a => a.id !== acc.id)); setConfirmDeleteAccId(null); } else { clearConfirmStates(); setConfirmDeleteAccId(acc.id); } }} className="delete-action p-1 rounded text-[#ccc] hover:text-[#b94a48]">{confirmDeleteAccId === acc.id ? <span className="text-[7px] font-bold">确认?</span> : <Trash2 size={14} />}</button>
+                  </div>
                 </div>
               ))}
-              <button onClick={(e) => { e.stopPropagation(); openAddAccount(); }} className="w-full py-3 border-2 border-dashed border-[#e0ddd5] rounded text-[10px] font-bold uppercase text-[#999] hover:text-[#7d513d] transition-all"><Plus size={16} className="inline mr-1" />添加账户</button>
+              <button onClick={(e) => { e.stopPropagation(); openAddAccount(); }} className="w-full py-2.5 border-2 border-dashed border-[#e0ddd5] rounded text-[9px] font-bold uppercase text-[#999] hover:text-[#7d513d] transition-all"><Plus size={14} className="inline mr-1" />添加新账户</button>
             </div>
           </div>
         </div>
       )}
 
-      {isAccountModalOpen && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => { setIsAccountModalOpen(false); setEditingAccount(null); }}>
-          <div className="bg-white w-full max-w-sm rounded shadow-2xl p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#333] mb-6">{editingAccount ? '编辑账户' : '新增账户'}</h2>
-            <form onSubmit={handleSaveAccount} className="space-y-4">
-              <div className="space-y-1"><label className="text-[10px] font-bold text-[#999] uppercase">名称</label><input type="text" value={accName} onChange={e => setAccName(e.target.value)} required placeholder="如：现金、支付宝" className="w-full border-b border-[#e0ddd5] py-2 text-sm outline-none bg-transparent focus:border-[#7d513d]" /></div>
-              <div className="space-y-1"><label className="text-[10px] font-bold text-[#999] uppercase">余额</label><div className="flex items-baseline border-b border-[#e0ddd5] py-1"><span className="text-xs text-[#ccc] mr-1">¥</span><input type="number" step="0.01" value={accInitialBalance} onChange={e => setAccInitialBalance(e.target.value)} className="w-full text-lg font-mono outline-none bg-transparent" /></div></div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-[#999] uppercase">类型</label>
-                <select value={accType} onChange={e => setAccType(e.target.value)} className="w-full border-b border-[#e0ddd5] py-2 text-sm outline-none bg-transparent focus:border-[#7d513d]">
-                   {accountTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
+      {isEditBalanceModalOpen && (
+        <div className="fixed inset-0 z-[170] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsEditBalanceModalOpen(null)}>
+          <div className="bg-white w-full max-w-sm rounded border border-[#e0ddd5] shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#333]">校准余额</h2>
+                <p className="text-[10px] text-[#999] font-bold uppercase tracking-widest mt-0.5">{isEditBalanceModalOpen.name}</p>
               </div>
-              <div className="space-y-1"><label className="text-[10px] font-bold text-[#999] uppercase">颜色</label><div className="flex flex-wrap gap-3 pt-1">{PRESET_COLORS.map(c => (<button key={c} type="button" onClick={() => setAccColor(c)} className={`w-6 h-6 rounded-full border-2 transition-all ${accColor === c ? 'border-[#333] scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div></div>
-              <button type="submit" className="w-full py-4 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-[0.3em] shadow-lg mt-4">保存账户</button>
+              <button onClick={() => setIsEditBalanceModalOpen(null)}><X size={24} className="text-[#ccc]" /></button>
+            </div>
+            <form onSubmit={handleUpdateBalance} className="space-y-6">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-[#999] uppercase tracking-wider">当前实际余额</label>
+                <div className="flex items-baseline gap-1 border-b border-[#e0ddd5] py-2">
+                  <span className="text-xs text-[#ccc] select-none">¥</span>
+                  <input type="number" step="0.01" value={manualBalanceValue} onChange={e => setManualBalanceValue(e.target.value)} autoFocus className="w-full text-3xl font-mono font-light outline-none bg-transparent" />
+                </div>
+              </div>
+              <button type="submit" className="w-full py-4 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-[0.3em] shadow-lg">确认修正</button>
             </form>
           </div>
         </div>
