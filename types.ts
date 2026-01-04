@@ -37,6 +37,7 @@ export interface CategoryInfo {
   color: string;
 }
 
+// Added missing FinancialInsight interface to resolve import error in geminiService.ts
 export interface FinancialInsight {
   tip: string;
   analysis: string;

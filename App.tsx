@@ -2,11 +2,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Plus, BarChart3, LayoutDashboard, X, Trash2, ChevronRight, ChevronLeft, 
-  ChevronsLeft, ChevronsRight, ChevronDown, TrendingUp, Settings, 
+  ChevronDown, TrendingUp, Settings, 
   Wallet, CreditCard, Landmark, Coins, PlusCircle, 
   Pencil, RefreshCw, BarChart, List, BadgePercent, GripVertical, 
-  Settings2, Palette, PlusSquare, Save, FileUp, Calendar as CalendarIcon,
-  AlertCircle, Target, Tag
+  Calendar as CalendarIcon, AlertCircle, Target, Tag,
+  // Added missing imports for Save and FileUp icons
+  Save, FileUp
 } from 'lucide-react';
 import { Transaction, Budget, CategoryInfo, Account } from './types';
 import { CATEGORIES as INITIAL_CATEGORIES, getIcon } from './constants';
@@ -14,7 +15,7 @@ import StatsCards from './components/StatsCards';
 import BudgetTracker from './components/BudgetTracker';
 import { 
   ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, 
-  BarChart as ReBarChart, Bar, AreaChart, Area, Cell, Legend
+  BarChart as ReBarChart, Bar, AreaChart, Area
 } from 'recharts';
 
 type Tab = 'dashboard' | 'stats' | 'assets' | 'settings';
@@ -43,6 +44,17 @@ const COLOR_MAP: Record<string, string> = {
   'bg-rose-400': '#fb7185',
   'bg-gray-400': '#9ca3af',
 };
+
+const BrandIcon = () => (
+  <div className="relative w-10 h-10 flex items-center justify-center">
+    <div className="absolute inset-0 bg-[#7d513d] rounded-lg shadow-md transform rotate-3"></div>
+    <div className="absolute inset-0 bg-[#fafafa] rounded-lg border border-[#e0ddd5] flex items-center justify-center shadow-sm">
+      <div className="w-5 h-5 border-2 border-[#7d513d] rounded-full flex items-center justify-center">
+        <div className="w-1 h-1 bg-[#7d513d] rounded-full"></div>
+      </div>
+    </div>
+  </div>
+);
 
 const getAccountIcon = (type: string, isLiability?: boolean, isSavings?: boolean) => {
   if (isLiability) return <AlertCircle size={18} />;
@@ -514,18 +526,20 @@ const App: React.FC = () => {
          clearConfirmStates();
        }
     }}>
-      <main className="max-w-4xl mx-auto px-4 pt-[calc(env(safe-area-inset-top)+2.5rem)]">
+      <main className="max-w-4xl mx-auto px-4 pt-[calc(env(safe-area-inset-top)+1rem)] md:pt-[calc(env(safe-area-inset-top)+2.5rem)]">
         {activeTab === 'dashboard' ? (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1">
-                <button onClick={(e) => { e.stopPropagation(); setDashboardMonth(prev => { const [y, m] = prev.split('-').map(Number); const d = new Date(y, m-2, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}`; }); }} className="p-1 text-[#ccc] hover:text-[#7d513d] transition-colors"><ChevronLeft size={16} /></button>
-                <div className="relative cursor-pointer px-2 group flex items-center gap-2">
-                  <h2 className="text-xl font-serif font-bold text-[#333] whitespace-nowrap">{dashboardMonth.split('-')[0]}年{parseInt(dashboardMonth.split('-')[1])}月</h2>
-                  <CalendarIcon size={16} className="text-[#ccc] group-hover:text-[#7d513d] transition-colors" />
-                  <input type="month" value={dashboardMonth} onChange={(e) => setDashboardMonth(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1">
+                  <button onClick={(e) => { e.stopPropagation(); setDashboardMonth(prev => { const [y, m] = prev.split('-').map(Number); const d = new Date(y, m-2, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}`; }); }} className="p-1 text-[#ccc] hover:text-[#7d513d] transition-colors"><ChevronLeft size={16} /></button>
+                  <div className="relative cursor-pointer px-2 group flex items-center gap-2">
+                    <h2 className="text-xl font-serif font-bold text-[#333] whitespace-nowrap">{dashboardMonth.split('-')[0]}年{parseInt(dashboardMonth.split('-')[1])}月</h2>
+                    <CalendarIcon size={16} className="text-[#ccc] group-hover:text-[#7d513d] transition-colors" />
+                    <input type="month" value={dashboardMonth} onChange={(e) => setDashboardMonth(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); setDashboardMonth(prev => { const [y, m] = prev.split('-').map(Number); const d = new Date(y, m, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}`; }); }} className="p-1 text-[#ccc] hover:text-[#7d513d] transition-colors"><ChevronRight size={16} /></button>
                 </div>
-                <button onClick={(e) => { e.stopPropagation(); setDashboardMonth(prev => { const [y, m] = prev.split('-').map(Number); const d = new Date(y, m, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}`; }); }} className="p-1 text-[#ccc] hover:text-[#7d513d] transition-colors"><ChevronRight size={16} /></button>
               </div>
             </div>
             
@@ -782,43 +796,54 @@ const App: React.FC = () => {
         <button onClick={(e) => { e.stopPropagation(); setActiveTab('settings'); }} className={`flex flex-col items-center gap-1.5 flex-1 transition-colors ${activeTab === 'settings' ? 'text-[#7d513d]' : 'text-[#999]'}`}><Settings size={20} /><span className="text-[9px] font-bold uppercase">设置</span></button>
       </nav>
 
-      {/* 新增交易弹窗 */}
+      {/* 新增交易弹窗 - 优化尺寸 */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
-          <div className="bg-[#fafafa] w-full max-sm:w-[95%] max-w-sm rounded border border-[#e0ddd5] shadow-2xl p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6"><h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#333]">新增交易</h2><button onClick={() => setIsModalOpen(false)}><X size={24} className="text-[#ccc]" /></button></div>
-            <form onSubmit={handleAddTransaction} className="space-y-6">
+          <div className="bg-[#fafafa] w-full max-sm:w-[92%] max-w-sm rounded border border-[#e0ddd5] shadow-2xl p-4 md:p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4"><h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#333]">新增交易</h2><button onClick={() => setIsModalOpen(false)}><X size={20} className="text-[#ccc]" /></button></div>
+            <form onSubmit={handleAddTransaction} className="space-y-4">
               <div className="flex p-1 bg-[#f0eee8] rounded border border-[#e0ddd5]">
-                <button type="button" onClick={() => setType('expense')} className={`flex-1 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${type === 'expense' ? 'bg-white text-[#333]' : 'text-[#999]'}`}>支出</button>
-                <button type="button" onClick={() => setType('income')} className={`flex-1 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${type === 'income' ? 'bg-white text-[#468847]' : 'text-[#999]'}`}>收入</button>
+                <button type="button" onClick={() => setType('expense')} className={`flex-1 py-1 rounded text-[9px] font-bold uppercase transition-all ${type === 'expense' ? 'bg-white text-[#333] shadow-sm' : 'text-[#999]'}`}>支出</button>
+                <button type="button" onClick={() => setType('income')} className={`flex-1 py-1 rounded text-[9px] font-bold uppercase transition-all ${type === 'income' ? 'bg-white text-[#468847] shadow-sm' : 'text-[#999]'}`}>收入</button>
               </div>
-              <div className="border-b border-[#e0ddd5] pb-2 flex items-baseline"><span className="text-[#ccc] text-lg mr-2 select-none">¥</span><input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" autoFocus className="bg-transparent text-4xl font-light w-full outline-none font-mono" /></div>
+              <div className="border-b border-[#e0ddd5] pb-1.5 flex items-baseline"><span className="text-[#ccc] text-base mr-1.5 select-none">¥</span><input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" autoFocus className="bg-transparent text-3xl font-light w-full outline-none font-mono" /></div>
               
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-[#999] uppercase tracking-widest flex items-center gap-1">
-                  <CalendarIcon size={12} /> 日期
-                </label>
-                <input type="date" value={transactionDate} onChange={(e) => setTransactionDate(e.target.value)} className="w-full bg-[#f0eee8] border border-[#e0ddd5] px-3 py-2 rounded text-xs font-mono font-bold text-[#333] outline-none" />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-[#999] uppercase tracking-widest flex items-center gap-1">
+                    <CalendarIcon size={10} /> 日期
+                  </label>
+                  <input type="date" value={transactionDate} onChange={(e) => setTransactionDate(e.target.value)} className="w-full bg-[#f0eee8] border border-[#e0ddd5] px-2 py-1.5 rounded text-[10px] font-mono font-bold text-[#333] outline-none" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-[#999] uppercase tracking-widest flex items-center gap-1">
+                    <CreditCard size={10} /> 账户
+                  </label>
+                  <select value={selectedAccountId} onChange={(e) => setSelectedAccountId(e.target.value)} className="w-full bg-[#f0eee8] border border-[#e0ddd5] px-2 py-1.5 rounded text-[10px] font-bold text-[#333] outline-none appearance-none">
+                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                  </select>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-[#999] uppercase tracking-widest">分类</label>
-                <div className="grid grid-cols-4 gap-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-bold text-[#999] uppercase tracking-widest">分类</label>
+                <div className="grid grid-cols-5 gap-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-0.5">
+                    {/* Fixed redundant/incorrect cast that caused unknown type error by explicitly casting to CategoryInfo[] */}
                     {(categories as CategoryInfo[]).map((cat: CategoryInfo) => (
-                        <button key={cat.id} type="button" onClick={() => setCategoryName(cat.name)} className={`p-2 rounded border flex flex-col items-center gap-1.5 transition-all ${categoryName === cat.name ? 'border-[#7d513d] bg-[#fdfaf5]' : 'border-transparent opacity-60'}`}>
-                            <div className="w-10 h-10 border rounded flex items-center justify-center bg-white text-[#7d513d] shadow-sm">{getIcon(cat.icon, 'w-4 h-4')}</div>
-                            <span className="text-[8px] font-bold truncate w-full text-center uppercase tracking-tighter">{cat.name}</span>
+                        <button key={cat.id} type="button" onClick={() => setCategoryName(cat.name)} className={`py-1.5 rounded border flex flex-col items-center gap-1 transition-all ${categoryName === cat.name ? 'border-[#7d513d] bg-[#fdfaf5]' : 'border-transparent opacity-60'}`}>
+                            <div className="w-8 h-8 border rounded flex items-center justify-center bg-white text-[#7d513d] shadow-xs">{getIcon(cat.icon, 'w-3.5 h-3.5')}</div>
+                            <span className="text-[7px] font-bold truncate w-full text-center uppercase tracking-tighter">{cat.name}</span>
                         </button>
                     ))}
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-[#999] uppercase tracking-widest">备注</label>
-                <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="写点什么..." className="w-full border-b border-[#e0ddd5] py-2 text-sm outline-none bg-transparent focus:border-[#7d513d]" />
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-[#999] uppercase tracking-widest">备注</label>
+                <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="记录点什么..." className="w-full border-b border-[#e0ddd5] py-1.5 text-xs outline-none bg-transparent focus:border-[#7d513d]" />
               </div>
 
-              <button type="submit" className="w-full py-4 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-[0.4em] shadow-xl">保存流水</button>
+              <button type="submit" className="w-full py-3 bg-[#7d513d] text-white rounded text-[9px] font-bold uppercase tracking-[0.3em] shadow-lg mt-2 active:scale-95 transition-transform">保存流水</button>
             </form>
           </div>
         </div>
@@ -827,7 +852,7 @@ const App: React.FC = () => {
       {/* 分类管理弹窗 */}
       {isCategoryManagerOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsCategoryManagerOpen(false)}>
-          <div className="bg-[#fafafa] w-full max-w-sm rounded shadow-2xl border border-[#e0ddd5] flex flex-col max-h-[70vh]" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#fafafa] w-full max-sm:w-[95%] max-w-sm rounded shadow-2xl border border-[#e0ddd5] flex flex-col max-h-[70vh]" onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-[#e0ddd5] bg-white flex justify-between items-center">
               <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#333]">收支分类管理</h2>
               <button onClick={() => setIsCategoryManagerOpen(false)}><X size={24} className="text-[#ccc]" /></button>
@@ -860,7 +885,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* 编辑/新建分类名称弹窗 - 独立控制且 z-index 更高 */}
+      {/* 编辑/新建分类名称弹窗 - z-index 300 */}
       {showEditCategoryModal && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => { setEditingCategory(null); setEditCategoryName(''); setShowEditCategoryModal(false); }}>
           <div className="bg-white w-full max-w-xs rounded shadow-2xl p-6" onClick={e => e.stopPropagation()}>
@@ -870,7 +895,10 @@ const App: React.FC = () => {
                 <label className="text-[10px] font-bold text-[#999] uppercase tracking-wider">分类名称</label>
                 <input type="text" value={editCategoryName} onChange={e => setEditCategoryName(e.target.value)} required placeholder="输入分类名称" autoFocus className="w-full border-b border-[#e0ddd5] py-2 text-sm outline-none bg-transparent focus:border-[#7d513d]" />
               </div>
-              <button type="submit" className="w-full py-4 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-[0.3em] shadow-lg">确认保存</button>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowEditCategoryModal(false)} className="flex-1 py-3 border border-[#e0ddd5] rounded text-[10px] font-bold uppercase text-[#999]">取消</button>
+                <button type="submit" className="flex-1 py-3 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-[0.3em] shadow-lg">确认保存</button>
+              </div>
             </form>
           </div>
         </div>
@@ -888,7 +916,6 @@ const App: React.FC = () => {
             </div>
             <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
               <div className="space-y-1.5">
-                  {/* Added explicit cast to Transaction[] for transactions to resolve line 704 unknown type map error */}
                   {(transactions as Transaction[]).length > 0 ? [...(transactions as Transaction[])].sort((a,b)=>new Date(b.date).getTime()-new Date(a.date).getTime()).map(t => (
                       <div key={t.id} className="hammer-card flex items-center justify-between p-3 border-b last:border-0 border-[#f0eee8] group hover:bg-[#fafafa] transition-colors">
                         <div className="flex items-center gap-3">
@@ -915,9 +942,6 @@ const App: React.FC = () => {
                       </div>
                   )) : (<div className="py-24 text-center text-[#ccc] text-[10px] font-bold uppercase italic tracking-widest">NO DATA</div>)}
               </div>
-            </div>
-            <div className="p-3 bg-white border-t text-center">
-              <p className="text-[8px] text-[#ccc] font-bold uppercase tracking-widest">End of History</p>
             </div>
           </div>
         </div>
@@ -982,7 +1006,7 @@ const App: React.FC = () => {
           <div className="bg-white w-full max-sm:w-[95%] max-w-sm rounded shadow-2xl p-6" onClick={e => e.stopPropagation()}>
             <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#333] mb-6">{editingAccount ? '编辑账户' : '新增资产账户'}</h2>
             <form onSubmit={handleSaveAccount} className="space-y-4">
-              <div className="space-y-1"><label className="text-[10px] font-bold text-[#999] uppercase">账户名称</label><input type="text" value={accName} onChange={e => setAccName(e.target.value)} required placeholder="如：备用金、房贷还款" className="w-full border-b border-[#e0ddd5] py-2 text-sm outline-none bg-transparent focus:border-[#7d513d]" /></div>
+              <div className="space-y-1"><label className="text-[10px] font-bold text-[#999] uppercase">账户名称</label><input type="text" value={accName} onChange={e => setAccName(e.target.value)} required placeholder="如：备用金" className="w-full border-b border-[#e0ddd5] py-2 text-sm outline-none bg-transparent focus:border-[#7d513d]" /></div>
               <div className="space-y-1"><label className="text-[10px] font-bold text-[#999] uppercase">当前余额</label><div className="flex items-baseline border-b border-[#e0ddd5] py-1"><span className="text-xs text-[#ccc] mr-1 select-none">¥</span><input type="number" step="0.01" value={accInitialBalance} onChange={e => setAccInitialBalance(e.target.value)} className="w-full text-lg font-mono outline-none bg-transparent" /></div></div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-[#999] uppercase">账户类型</label>
