@@ -29,7 +29,7 @@ const DEFAULT_ACCOUNTS: Account[] = [
 ];
 
 const DEFAULT_ACCOUNT_TYPES = ['现金', '第三方支付', '银行储蓄', '信用卡/负债', '理财/投资'];
-const PRESET_COLORS = ['#7d513d', '#1677ff', '#07c160', '#333333', '#e11d48', '#7c3aed', '#ea580c', '#0891b2', '#4b5563'];
+const PRESET_COLORS = ['#7d513d', '#1677ff', '#07c160', '#333333', '#e11d48', '#7c3aed', '#ea580c', '#0891b2', '#4b5563', '#f97316', '#ec4899', '#6366f1'];
 
 const CHART_COLORS = ['#7d513d', '#1677ff', '#07c160', '#e11d48', '#7c3aed', '#ea580c', '#0891b2', '#4b5563', '#94a3b8', '#10b981', '#333333'];
 
@@ -230,6 +230,7 @@ const App: React.FC = () => {
   // 分类编辑状态
   const [catName, setCatName] = useState('');
   const [catIcon, setCatIcon] = useState('Utensils');
+  const [catColor, setCatColor] = useState(PRESET_COLORS[0]);
 
   useEffect(() => {
     if (accounts.length > 0 && !selectedAccountId) {
@@ -276,15 +277,15 @@ const App: React.FC = () => {
   }, [transactions, dashboardMonth]);
 
   const monthlyStats = useMemo(() => {
-    const income = dashboardTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-    const expense = dashboardTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const income = dashboardTransactions.filter(t => t.type === 'income').reduce((s: number, t) => s + t.amount, 0);
+    const expense = dashboardTransactions.filter(t => t.type === 'expense').reduce((s: number, t) => s + t.amount, 0);
     return { income, expense };
   }, [dashboardTransactions]);
 
   const periodStats = useMemo(() => {
     const start = new Date(startDate); start.setHours(0,0,0,0);
     const end = new Date(endDate); end.setHours(23,59,59,999);
-    const txs = transactions.filter(t => { 
+    const txs: Transaction[] = transactions.filter((t: Transaction) => { 
         const d = new Date(t.date); 
         return d.getTime() >= start.getTime() && d.getTime() <= end.getTime(); 
     });
@@ -295,16 +296,16 @@ const App: React.FC = () => {
     const curr = new Date(start);
     while (curr.getTime() <= end.getTime()) {
       const dateStr = curr.toISOString().split('T')[0];
-      const dayTxs = txs.filter(t => t.date.startsWith(dateStr));
+      const dayTxs: Transaction[] = txs.filter((t: Transaction) => t.date.startsWith(dateStr));
       
       trendData.push({
         date: dateStr.slice(5), 
-        income: dayTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0),
-        expense: dayTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0),
+        income: dayTxs.filter((t: Transaction) => t.type === 'income').reduce((s: number, t: Transaction) => s + t.amount, 0),
+        expense: dayTxs.filter((t: Transaction) => t.type === 'expense').reduce((s: number, t: Transaction) => s + t.amount, 0),
       });
 
       const dayExpenseEntry: Record<string, any> = { date: dateStr.slice(5) };
-      dayTxs.filter(t => t.type === 'expense').forEach(t => {
+      dayTxs.filter((t: Transaction) => t.type === 'expense').forEach((t: Transaction) => {
         const currentVal = Number(dayExpenseEntry[t.category]) || 0;
         dayExpenseEntry[t.category] = currentVal + t.amount;
       });
@@ -318,7 +319,7 @@ const App: React.FC = () => {
         return acc;
     }, {} as Record<string, number>);
 
-    const totalExpense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    const totalExpense = txs.filter(t => t.type === 'expense').reduce((s: number, t) => s + t.amount, 0);
     const details = Object.entries(expenseByCategory).map(([name, value]) => ({ 
       name, 
       value,
@@ -337,7 +338,7 @@ const App: React.FC = () => {
     ];
 
     return { 
-      income: txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0),
+      income: txs.filter(t => t.type === 'income').reduce((s: number, t) => s + t.amount, 0),
       expense: totalExpense,
       trendData,
       dailyStackedData,
@@ -476,11 +477,32 @@ const App: React.FC = () => {
     setIsEditBalanceModalOpen(null);
   };
 
-  const handleUpdateBudget = (category: string, value: number) => {
+  const handleUpdateBudget = (category: string, field: keyof Budget, value: number) => {
     setBudgets(prev => {
-      const exists = prev.find(b => b.category === category);
-      if (exists) return prev.map(b => b.category === category ? { ...b, limit: value } : b);
-      return [...prev, { category, limit: value }];
+      let newItem: Budget = { category, limit: 0, dailyLimit: 0, yearlyLimit: 0 };
+      const existing = prev.find(b => b.category === category);
+      if (existing) {
+        newItem = { ...existing };
+      }
+
+      if (field === 'dailyLimit') {
+          newItem.dailyLimit = value;
+          newItem.limit = Math.round(value * 30);
+          newItem.yearlyLimit = Math.round(value * 365);
+      } else if (field === 'limit') {
+          newItem.limit = value;
+          newItem.dailyLimit = Math.round(value / 30);
+          newItem.yearlyLimit = Math.round(value * 12);
+      } else if (field === 'yearlyLimit') {
+          newItem.yearlyLimit = value;
+          newItem.dailyLimit = Math.round(value / 365);
+          newItem.limit = Math.round(value / 12);
+      }
+
+      if (existing) {
+        return prev.map(b => b.category === category ? newItem : b);
+      }
+      return [...prev, newItem];
     });
   };
 
@@ -491,6 +513,11 @@ const App: React.FC = () => {
     const link = document.createElement('a');
     link.href = url; link.download = `ZenBudget_Backup.json`;
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    
+    // Notify user about the location
+    setTimeout(() => {
+        alert("备份文件下载已开始。\n\n请查看您浏览器的默认“下载”文件夹。\n(通常为 Downloads 目录)");
+    }, 500);
   };
 
   const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -551,26 +578,29 @@ const App: React.FC = () => {
                     <button onClick={() => setIsHistoryVisible(true)} className="text-[10px] text-[#999] font-bold uppercase hover:text-[#7d513d]">全部明细 <ChevronRight size={12} className="inline" /></button>
                   </div>
                   <div className="space-y-0">
-                    {dashboardTransactions.slice(0, 8).map(t => (
-                      <div key={t.id} className="flex items-center justify-between py-4 border-b border-[#e0ddd5] last:border-0 group">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded border border-[#e0ddd5] flex items-center justify-center text-[#7d513d] bg-[#f9f9f9] shadow-inner">
-                            {getIcon(categories.find(c => c.name === t.category)?.icon || 'MoreHorizontal', 'w-4 h-4')}
-                          </div>
-                          <div>
-                            <div className="flex items-baseline gap-2">
-                                <p className="text-xs font-bold text-[#333]">{t.category}</p>
-                                <span className="text-[9px] font-mono text-[#ccc]">{new Date(t.date).getDate()}日</span>
+                    {dashboardTransactions.slice(0, 8).map(t => {
+                      const categoryColor = categories.find(c => c.name === t.category)?.color || '#9ca3af';
+                      return (
+                        <div key={t.id} className="flex items-center justify-between py-4 border-b border-[#e0ddd5] last:border-0 group">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded border border-[#e0ddd5] flex items-center justify-center text-white shadow-inner" style={{ backgroundColor: categoryColor }}>
+                              {getIcon(categories.find(c => c.name === t.category)?.icon || 'MoreHorizontal', 'w-4 h-4')}
                             </div>
-                            <p className="text-[10px] text-[#999] mt-0.5">{t.note || '无备注'}</p>
+                            <div>
+                              <div className="flex items-baseline gap-2">
+                                  <p className="text-xs font-bold text-[#333]">{t.category}</p>
+                                  <span className="text-[9px] font-mono text-[#ccc]">{new Date(t.date).getDate()}日</span>
+                              </div>
+                              <p className="text-[10px] text-[#999] mt-0.5">{t.note || '无备注'}</p>
+                            </div>
+                          </div>
+                          <div className="text-right flex items-center gap-4">
+                            <p className={`text-sm font-mono font-bold ${t.type === 'expense' ? 'text-[#333]' : 'text-[#468847]'}`}>{t.type === 'expense' ? '-' : '+'}¥{t.amount.toLocaleString()}</p>
+                            <button onClick={(e) => { e.stopPropagation(); if (confirmDeleteTxId === t.id) { setTransactions(transactions.filter(tx => tx.id !== t.id)); setConfirmDeleteTxId(null); } else { setConfirmDeleteTxId(t.id); } }} className={`p-1.5 rounded transition-all ${confirmDeleteTxId === t.id ? 'bg-[#b94a48] text-white' : 'text-[#ccc] hover:text-[#b94a48]'}`}>{confirmDeleteTxId === t.id ? <span className="text-[8px] font-bold px-1">确认?</span> : <Trash2 size={12} />}</button>
                           </div>
                         </div>
-                        <div className="text-right flex items-center gap-4">
-                          <p className={`text-sm font-mono font-bold ${t.type === 'expense' ? 'text-[#333]' : 'text-[#468847]'}`}>{t.type === 'expense' ? '-' : '+'}¥{t.amount.toLocaleString()}</p>
-                          <button onClick={(e) => { e.stopPropagation(); if (confirmDeleteTxId === t.id) { setTransactions(transactions.filter(tx => tx.id !== t.id)); setConfirmDeleteTxId(null); } else { setConfirmDeleteTxId(t.id); } }} className={`p-1.5 rounded transition-all ${confirmDeleteTxId === t.id ? 'bg-[#b94a48] text-white' : 'text-[#ccc] hover:text-[#b94a48]'}`}>{confirmDeleteTxId === t.id ? <span className="text-[8px] font-bold px-1">确认?</span> : <Trash2 size={12} />}</button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {dashboardTransactions.length === 0 && <div className="py-12 text-center text-[#ccc] text-xs font-bold uppercase italic">暂无记录</div>}
                   </div>
                 </div>
@@ -641,42 +671,6 @@ const App: React.FC = () => {
                                 <span className="text-[8px] font-bold text-[#999] uppercase">{cat}</span>
                             </div>
                         ))}
-                    </div>
-                </div>
-
-                 {/* 每日消费趋势堆积图 (Vertical Stacked Bar Chart) */}
-                 <div className="hammer-card p-6">
-                    <h3 className="text-xs font-bold text-[#333] tracking-widest uppercase mb-6 flex items-center gap-2"><div className="w-1 h-3.5 bg-[#7d513d]"></div>每日消费趋势 (堆积)</h3>
-                    <div className="h-[250px] w-full">
-                        {periodStats.expense > 0 ? (
-                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart 
-                                    data={periodStats.dailyStackedData} 
-                                    margin={{ top: 5, right: 10, left: -20, bottom: 5 }}
-                                >
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0eee8" />
-                                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#999', fontSize: 8}} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#999', fontSize: 8}} />
-                                    <Tooltip 
-                                        contentStyle={{ fontSize: '10px', borderRadius: '4px' }} 
-                                        formatter={(val: number) => `¥${val.toLocaleString()}`} 
-                                        cursor={{ fill: '#f4f1ea' }}
-                                    />
-                                    {periodStats.categoryNamesInExpense.map((cat, idx) => (
-                                        <Bar 
-                                            key={cat} 
-                                            dataKey={cat} 
-                                            stackId="a" 
-                                            fill={CHART_COLORS[idx % CHART_COLORS.length]} 
-                                        />
-                                    ))}
-                                </BarChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="h-full flex items-center justify-center">
-                                <p className="text-[10px] font-bold uppercase text-[#ccc] italic">暂无支出数据</p>
-                            </div>
-                        )}
                     </div>
                 </div>
 
@@ -798,16 +792,18 @@ const App: React.FC = () => {
                             <button onClick={() => handleMoveCategory(index, 'up')} className="p-0.5 text-[#ccc] hover:text-[#7d513d] disabled:opacity-10" disabled={index === 0}><ChevronUp size={12} /></button>
                             <button onClick={() => handleMoveCategory(index, 'down')} className="p-0.5 text-[#ccc] hover:text-[#7d513d] disabled:opacity-10" disabled={index === categories.length - 1}><ChevronDown size={12} /></button>
                         </div>
-                        <div className="w-8 h-8 rounded border flex items-center justify-center bg-[#f9f9f9] text-[#7d513d]">{getIcon(cat.icon, 'w-4 h-4')}</div>
+                        <div className="w-8 h-8 rounded border flex items-center justify-center text-white" style={{ backgroundColor: cat.color }}>
+                            {getIcon(cat.icon, 'w-4 h-4')}
+                        </div>
                         <p className="text-xs font-bold">{cat.name}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                        <button onClick={() => { setEditingCategory(cat); setCatName(cat.name); setCatIcon(cat.icon); setIsCategoryManagerOpen(true); }} className="p-1.5 text-[#ccc] hover:text-[#7d513d]"><Pencil size={12} /></button>
+                        <button onClick={() => { setEditingCategory(cat); setCatName(cat.name); setCatIcon(cat.icon); setCatColor(cat.color); setIsCategoryManagerOpen(true); }} className="p-1.5 text-[#ccc] hover:text-[#7d513d]"><Pencil size={12} /></button>
                         <button onClick={() => { if (confirmDeleteCatId === cat.id) { setCategories(categories.filter(c => c.id !== cat.id)); setConfirmDeleteCatId(null); } else { setConfirmDeleteCatId(cat.id); } }} className="p-1.5 text-[#ccc] hover:text-[#b94a48]">{confirmDeleteCatId === cat.id ? <span className="text-[8px] font-bold">确认?</span> : <Trash2 size={12} />}</button>
                         </div>
                     </div>
                     ))}
-                    <button onClick={() => { setEditingCategory(null); setCatName(''); setCatIcon('Utensils'); setIsCategoryManagerOpen(true); }} className="w-full py-2.5 border-2 border-dashed border-[#e0ddd5] rounded text-[9px] font-bold uppercase text-[#999] hover:text-[#7d513d] transition-all"><Plus size={14} className="inline mr-1" />添加新分类</button>
+                    <button onClick={() => { setEditingCategory(null); setCatName(''); setCatIcon('Utensils'); setCatColor(PRESET_COLORS[0]); setIsCategoryManagerOpen(true); }} className="w-full py-2.5 border-2 border-dashed border-[#e0ddd5] rounded text-[9px] font-bold uppercase text-[#999] hover:text-[#7d513d] transition-all"><Plus size={14} className="inline mr-1" />添加新分类</button>
                 </div>
               )}
             </div>
@@ -889,7 +885,7 @@ const App: React.FC = () => {
                   id: editingCategory?.id || Date.now().toString(),
                   name: catName,
                   icon: catIcon,
-                  color: editingCategory?.color || 'bg-gray-400'
+                  color: catColor
                 };
                 if (editingCategory) setCategories(categories.map(c => c.id === editingCategory.id ? newCat : c));
                 else setCategories([...categories, newCat]);
@@ -904,6 +900,14 @@ const App: React.FC = () => {
                       {getIcon(icon, 'w-4 h-4')}
                     </button>
                   ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-[#999] uppercase">选择颜色</label>
+                <div className="flex flex-wrap gap-2 pt-2">
+                    {PRESET_COLORS.map(c => (
+                        <button key={c} type="button" onClick={() => setCatColor(c)} className={`w-6 h-6 rounded-full border-2 transition-all ${catColor === c ? 'border-[#333] scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />
+                    ))}
                 </div>
               </div>
               <button type="submit" className="w-full py-4 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-[0.3em] shadow-lg mt-4">确认保存</button>
@@ -983,7 +987,9 @@ const App: React.FC = () => {
                 .map(t => (
                   <div key={t.id} className="flex items-center justify-between p-3 border-b border-[#f0eee8] hover:bg-[#fafafa]">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded border border-[#e0ddd5] flex items-center justify-center text-[#7d513d] bg-white">{getIcon(categories.find(c => c.name === t.category)?.icon || 'MoreHorizontal', 'w-4 h-4')}</div>
+                      <div className="w-8 h-8 rounded border border-[#e0ddd5] flex items-center justify-center text-white bg-white" style={{ backgroundColor: categories.find(c => c.name === t.category)?.color || '#9ca3af' }}>
+                          {getIcon(categories.find(c => c.name === t.category)?.icon || 'MoreHorizontal', 'w-4 h-4')}
+                      </div>
                       <div>
                         <p className="text-xs font-bold">{t.category}</p>
                         <p className="text-[9px] text-[#999]">{t.date.split('T')[0]} {t.note}</p>
@@ -1021,7 +1027,7 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-5 gap-1.5 max-h-40 overflow-y-auto custom-scrollbar">
                     {categories.map((cat: CategoryInfo) => (
                         <button key={cat.id} type="button" onClick={() => setCategoryName(cat.name)} className={`py-1.5 rounded border flex flex-col items-center gap-1 transition-all ${categoryName === cat.name ? 'border-[#7d513d] bg-[#fdfaf5]' : 'border-transparent opacity-60'}`}>
-                            <div className="w-8 h-8 border rounded flex items-center justify-center bg-white text-[#7d513d]">{getIcon(cat.icon, 'w-3.5 h-3.5')}</div>
+                            <div className="w-8 h-8 border rounded flex items-center justify-center bg-white text-white" style={{ backgroundColor: cat.color }}>{getIcon(cat.icon, 'w-3.5 h-3.5')}</div>
                             <span className="text-[7px] font-bold truncate w-full text-center uppercase">{cat.name}</span>
                         </button>
                     ))}
@@ -1108,7 +1114,7 @@ const App: React.FC = () => {
                   <div key={cat.id} className="border rounded bg-white overflow-hidden shadow-sm">
                     <div className="p-3 flex items-center justify-between">
                       <div className="flex items-center gap-3 cursor-pointer flex-1" onClick={() => setExpandedBudgetCategory(isExp ? null : cat.name)}>
-                        <div className="w-8 h-8 rounded border flex items-center justify-center bg-[#f9f9f9] text-[#7d513d]">{getIcon(cat.icon, 'w-4 h-4')}</div>
+                        <div className="w-8 h-8 rounded border flex items-center justify-center text-white" style={{ backgroundColor: cat.color }}>{getIcon(cat.icon, 'w-4 h-4')}</div>
                         <span className="text-xs font-bold">{cat.name}</span>
                         <ChevronDown size={14} className={`transition-transform duration-300 ${isExp ? 'rotate-180' : ''}`} />
                       </div>
@@ -1121,8 +1127,22 @@ const App: React.FC = () => {
                       </div>
                     </div>
                     {isExp && (
-                      <div className="p-4 bg-[#fafafa] border-t border-[#f0eee8] animate-in slide-in-from-top duration-300">
-                        <div className="flex items-baseline gap-1 border-b pb-1"><span className="text-[10px] text-[#ccc]">月预算 ¥</span><input type="number" className="w-full text-xs font-mono font-bold outline-none bg-transparent" value={b?.limit || ''} onChange={(e) => handleUpdateBudget(cat.name, Number(e.target.value))} /></div>
+                      <div className="p-4 bg-[#fafafa] border-t border-[#f0eee8] animate-in slide-in-from-top duration-300 grid grid-cols-1 gap-4">
+                        <div className="flex items-baseline gap-1 border-b pb-1">
+                            <span className="text-[10px] text-[#999] w-12">日预算</span>
+                            <span className="text-[10px] text-[#ccc]">¥</span>
+                            <input type="number" className="w-full text-xs font-mono font-bold outline-none bg-transparent" value={b?.dailyLimit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'dailyLimit', Number(e.target.value))} placeholder="可选" />
+                        </div>
+                        <div className="flex items-baseline gap-1 border-b pb-1">
+                            <span className="text-[10px] text-[#7d513d] font-bold w-12">月预算</span>
+                            <span className="text-[10px] text-[#ccc]">¥</span>
+                            <input type="number" className="w-full text-xs font-mono font-bold outline-none bg-transparent" value={b?.limit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'limit', Number(e.target.value))} placeholder="0" />
+                        </div>
+                        <div className="flex items-baseline gap-1 border-b pb-1">
+                            <span className="text-[10px] text-[#999] w-12">年预算</span>
+                            <span className="text-[10px] text-[#ccc]">¥</span>
+                            <input type="number" className="w-full text-xs font-mono font-bold outline-none bg-transparent" value={b?.yearlyLimit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'yearlyLimit', Number(e.target.value))} placeholder="可选" />
+                        </div>
                       </div>
                     )}
                   </div>
