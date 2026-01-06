@@ -8,8 +8,10 @@ export interface Account {
   initialBalance: number;
   color: string;
   isLiability?: boolean;
+  debtAmount?: number; // 负债总额
   repaymentMonths?: number;
   isSavings?: boolean;
+  savingsGoal?: number; // 攒钱目标
   savingsMonths?: number;
 }
 
@@ -37,7 +39,6 @@ export interface CategoryInfo {
   color: string;
 }
 
-// Added missing FinancialInsight interface to resolve import error in geminiService.ts
 export interface FinancialInsight {
   tip: string;
   analysis: string;
