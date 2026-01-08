@@ -246,13 +246,11 @@ const App: React.FC = () => {
   const [catIcon, setCatIcon] = useState('Utensils');
   const [catColor, setCatColor] = useState(PRESET_COLORS[0]);
 
-  // Modal Back Button Handling Logic
+  // Modal Back Button Handling Logic (Hash-based)
   const isAnyModalOpen = isModalOpen || isBudgetModalOpen || isAssetStatsVisible || 
     isHistoryVisible || isCategoryManagerOpen || isImportModalOpen || 
     isBackupModalOpen || confirmClearData || isAccountManagerOpen || 
     isAccountModalOpen || !!isEditBalanceModalOpen;
-
-  const isPoppingRef = useRef(false);
 
   const closeAllModals = useCallback(() => {
     setIsModalOpen(false);
@@ -270,24 +268,27 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (isAnyModalOpen) {
-      // Push a new state to history when any modal opens
-      window.history.pushState({ modalOpen: true }, '', window.location.href);
+      // Add hash if not present to create a history entry
+      // Use pushState with hash to prevent auto-scrolling if an element with that ID existed
+      if (!window.location.hash.includes('modal')) {
+        window.history.pushState(null, '', '#modal');
+      }
 
-      const handlePopState = () => {
-        // When back button is pressed, close modals instead of navigating back
-        isPoppingRef.current = true;
-        closeAllModals();
+      const onHashChange = () => {
+        // If hash is removed (user pressed back), close modals
+        if (!window.location.hash.includes('modal')) {
+          closeAllModals();
+        }
       };
 
-      window.addEventListener('popstate', handlePopState);
+      window.addEventListener('hashchange', onHashChange);
 
       return () => {
-        window.removeEventListener('popstate', handlePopState);
-        // If the modal was closed via UI (not back button), revert the history push
-        if (!isPoppingRef.current) {
+        window.removeEventListener('hashchange', onHashChange);
+        // If closing via UI (hash still exists), go back to remove it
+        if (window.location.hash.includes('modal')) {
            window.history.back();
         }
-        isPoppingRef.current = false;
       };
     }
   }, [isAnyModalOpen, closeAllModals]);
@@ -819,8 +820,8 @@ const App: React.FC = () => {
                           key={acc.id} 
                           acc={acc} 
                           onEdit={handleEditAccount}
-                          onAnalyze={(a) => { setAnalyzingAccount(a); setIsAssetStatsVisible(true); }}
                           onEditBalance={(a) => { setIsEditBalanceModalOpen(a); setManualBalanceValue(a.currentBalance.toString()); }}
+                          onAnalyze={(a) => { setAnalyzingAccount(a); setIsAssetStatsVisible(true); }}
                         />
                       ))}
                     </div>
