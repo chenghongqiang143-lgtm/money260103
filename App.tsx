@@ -246,6 +246,52 @@ const App: React.FC = () => {
   const [catIcon, setCatIcon] = useState('Utensils');
   const [catColor, setCatColor] = useState(PRESET_COLORS[0]);
 
+  // Modal Back Button Handling Logic
+  const isAnyModalOpen = isModalOpen || isBudgetModalOpen || isAssetStatsVisible || 
+    isHistoryVisible || isCategoryManagerOpen || isImportModalOpen || 
+    isBackupModalOpen || confirmClearData || isAccountManagerOpen || 
+    isAccountModalOpen || !!isEditBalanceModalOpen;
+
+  const isPoppingRef = useRef(false);
+
+  const closeAllModals = useCallback(() => {
+    setIsModalOpen(false);
+    setIsBudgetModalOpen(false);
+    setIsAssetStatsVisible(false);
+    setIsHistoryVisible(false);
+    setIsCategoryManagerOpen(false);
+    setIsImportModalOpen(false);
+    setIsBackupModalOpen(false);
+    setConfirmClearData(false);
+    setIsAccountManagerOpen(false);
+    setIsAccountModalOpen(false);
+    setIsEditBalanceModalOpen(null);
+  }, []);
+
+  useEffect(() => {
+    if (isAnyModalOpen) {
+      // Push a new state to history when any modal opens
+      window.history.pushState({ modalOpen: true }, '', window.location.href);
+
+      const handlePopState = () => {
+        // When back button is pressed, close modals instead of navigating back
+        isPoppingRef.current = true;
+        closeAllModals();
+      };
+
+      window.addEventListener('popstate', handlePopState);
+
+      return () => {
+        window.removeEventListener('popstate', handlePopState);
+        // If the modal was closed via UI (not back button), revert the history push
+        if (!isPoppingRef.current) {
+           window.history.back();
+        }
+        isPoppingRef.current = false;
+      };
+    }
+  }, [isAnyModalOpen, closeAllModals]);
+
   useEffect(() => {
     if (accounts.length > 0 && !selectedAccountId) {
       setSelectedAccountId(accounts[0].id);
