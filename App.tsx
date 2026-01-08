@@ -22,10 +22,10 @@ type Tab = 'dashboard' | 'stats' | 'assets' | 'settings';
 type AssetPeriod = '1m' | '3m' | '1y';
 
 const DEFAULT_ACCOUNTS: Account[] = [
-  { id: '1', name: '现金', type: '现金', initialBalance: 0, color: '#7d513d' },
+  { id: '1', name: '现金', type: '现金', initialBalance: 0, color: '#7d513d', note: '日常零花' },
   { id: '2', name: '支付宝', type: '第三方支付', initialBalance: 0, color: '#1677ff' },
   { id: '3', name: '微信支付', type: '第三方支付', initialBalance: 0, color: '#07c160' },
-  { id: '4', name: '招商银行', type: '银行储蓄', initialBalance: 0, color: '#333333' },
+  { id: '4', name: '招商银行', type: '银行储蓄', initialBalance: 0, color: '#333333', note: '工资卡' },
 ];
 
 const DEFAULT_ACCOUNT_TYPES = ['现金', '第三方支付', '银行储蓄', '信用卡/负债', '理财/投资'];
@@ -84,6 +84,7 @@ const AccountCard: React.FC<{
         </div>
         <div className="truncate flex-1">
           <h4 className="text-[11px] font-bold text-[#333] truncate leading-tight">{acc.name}</h4>
+          {acc.note && <p className="text-[8px] text-[#999] truncate mt-0.5">{acc.note}</p>}
           {(acc.isLiability || acc.isSavings) && (
             <div className="flex items-center gap-1 mt-0.5">
               <span className={`text-[7px] px-1 rounded-sm text-white font-bold uppercase ${acc.isLiability ? 'bg-[#b94a48]' : 'bg-[#7d513d]'}`}>
@@ -223,6 +224,7 @@ const App: React.FC = () => {
 
   // 账户表单临时状态
   const [accName, setAccName] = useState('');
+  const [accNote, setAccNote] = useState('');
   const [accType, setAccType] = useState(accountTypes[0]);
   const [accInitialBalance, setAccInitialBalance] = useState('0');
   const [accColor, setAccColor] = useState(PRESET_COLORS[0]);
@@ -419,6 +421,7 @@ const App: React.FC = () => {
   const handleEditAccount = useCallback((acc: Account) => {
     setEditingAccount(acc);
     setAccName(acc.name);
+    setAccNote(acc.note || '');
     setAccType(acc.type);
     setAccInitialBalance(acc.initialBalance.toString());
     setAccColor(acc.color);
@@ -434,6 +437,7 @@ const App: React.FC = () => {
     const newAcc: Account = { 
       id: editingAccount?.id || Date.now().toString(), 
       name: accName, type: accType, initialBalance: Number(accInitialBalance), color: accColor, 
+      note: accNote,
       isLiability: accIsLiability, isSavings: accIsSavings,
       repaymentMonths: accIsLiability ? Number(accPeriod) : undefined,
       debtAmount: accIsLiability ? Number(accTargetAmount) : undefined,
@@ -1018,6 +1022,76 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* 历史明细弹窗 */}
+      {isHistoryVisible && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsHistoryVisible(false)}>
+          <div className="bg-white w-full max-w-2xl rounded shadow-2xl flex flex-col h-[80vh]" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                    <h2 className="text-sm font-bold uppercase tracking-widest">流水历史</h2>
+                    <div className="relative"><Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#ccc]" /><input type="text" placeholder="搜索备注..." value={historySearch} onChange={e => setHistorySearch(e.target.value)} className="pl-7 pr-2 py-1 bg-[#f0eee8] rounded text-[10px] outline-none w-32 md:w-48" /></div>
+                </div>
+                <button onClick={() => setIsHistoryVisible(false)}><X size={24} className="text-[#ccc]" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+              {transactions
+                .filter(t => (t.note || '').toLowerCase().includes(historySearch.toLowerCase()) || (t.category || '').toLowerCase().includes(historySearch.toLowerCase()))
+                .map(t => (
+                  <div key={t.id} className="flex items-center justify-between p-3 border-b border-[#f0eee8] hover:bg-[#fafafa]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded border border-[#e0ddd5] flex items-center justify-center text-white bg-white" style={{ backgroundColor: categories.find(c => c.name === t.category)?.color || '#9ca3af' }}>
+                          {getIcon(categories.find(c => c.name === t.category)?.icon || 'MoreHorizontal', 'w-4 h-4')}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold">{t.category}</p>
+                        <p className="text-[9px] text-[#999]">{t.date.split('T')[0]} {t.note}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <p className={`text-sm font-mono font-bold ${t.type === 'income' ? 'text-[#468847]' : 'text-[#333]'}`}>{t.type === 'income' ? '+' : '-'}¥{t.amount.toLocaleString()}</p>
+                      <button onClick={() => setTransactions(transactions.filter(tx => tx.id !== t.id))} className="text-[#ccc] hover:text-[#b94a48]"><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 新增流水弹窗 */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
+          <div className="bg-[#fafafa] w-full max-sm:w-[95%] max-w-sm rounded border border-[#e0ddd5] shadow-2xl p-4" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4"><h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#333]">记一笔</h2><button onClick={() => setIsModalOpen(false)}><X size={20} className="text-[#ccc]" /></button></div>
+            <form onSubmit={handleAddTransaction} className="space-y-4">
+              <div className="flex p-1 bg-[#f0eee8] rounded border border-[#e0ddd5]">
+                <button type="button" onClick={() => setType('expense')} className={`flex-1 py-1 rounded text-[9px] font-bold uppercase ${type === 'expense' ? 'bg-white text-[#333]' : 'text-[#999]'}`}>支出</button>
+                <button type="button" onClick={() => setType('income')} className={`flex-1 py-1 rounded text-[9px] font-bold uppercase ${type === 'income' ? 'bg-white text-[#468847]' : 'text-[#999]'}`}>收入</button>
+              </div>
+              <div className="border-b border-[#e0ddd5] pb-1.5 flex items-baseline"><span className="text-[#ccc] text-base mr-1.5">¥</span><input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" autoFocus className="bg-transparent text-3xl font-light w-full outline-none font-mono" /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <input type="date" value={transactionDate} onChange={(e) => setTransactionDate(e.target.value)} className="w-full bg-[#f0eee8] border border-[#e0ddd5] px-2 py-1.5 rounded text-[10px] font-mono font-bold text-[#333] outline-none" />
+                <select value={selectedAccountId} onChange={(e) => setSelectedAccountId(e.target.value)} className="w-full bg-[#f0eee8] border border-[#e0ddd5] px-2 py-1.5 rounded text-[10px] font-bold text-[#333] outline-none">
+                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-5 gap-1.5 max-h-40 overflow-y-auto custom-scrollbar">
+                    {categories.map((cat: CategoryInfo) => (
+                        <button key={cat.id} type="button" onClick={() => setCategoryName(cat.name)} className={`py-1.5 rounded border flex flex-col items-center gap-1 transition-all ${categoryName === cat.name ? 'border-[#7d513d] bg-[#fdfaf5]' : 'border-transparent opacity-60'}`}>
+                            <div className="w-8 h-8 border rounded flex items-center justify-center bg-white text-white" style={{ backgroundColor: cat.color }}>{getIcon(cat.icon, 'w-3.5 h-3.5')}</div>
+                            <span className="text-[7px] font-bold truncate w-full text-center uppercase">{cat.name}</span>
+                        </button>
+                    ))}
+                </div>
+              </div>
+              <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="写点什么..." className="w-full border-b border-[#e0ddd5] py-1.5 text-xs outline-none bg-transparent" />
+              <button type="submit" className="w-full py-3 bg-[#7d513d] text-white rounded text-[9px] font-bold uppercase tracking-[0.3em] shadow-lg">保存</button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* 账户排序管理弹窗 */}
       {isAccountManagerOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsAccountManagerOpen(false)}>
@@ -1042,7 +1116,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
               ))}
-              <button onClick={() => { setEditingAccount(null); setAccName(''); setAccInitialBalance('0'); setAccType(accountTypes[0]); setAccIsLiability(false); setAccIsSavings(false); setAccPeriod('12'); setAccTargetAmount('0'); setIsAccountModalOpen(true); }} className="w-full py-2.5 border-2 border-dashed border-[#e0ddd5] rounded text-[9px] font-bold uppercase text-[#999] hover:text-[#7d513d]"><Plus size={14} className="inline mr-1" />新增账户</button>
+              <button onClick={() => { setEditingAccount(null); setAccName(''); setAccNote(''); setAccInitialBalance('0'); setAccType(accountTypes[0]); setAccIsLiability(false); setAccIsSavings(false); setAccPeriod('12'); setAccTargetAmount('0'); setIsAccountModalOpen(true); }} className="w-full py-2.5 border-2 border-dashed border-[#e0ddd5] rounded text-[9px] font-bold uppercase text-[#999] hover:text-[#7d513d]"><Plus size={14} className="inline mr-1" />新增账户</button>
             </div>
           </div>
         </div>
@@ -1055,6 +1129,7 @@ const App: React.FC = () => {
             <h2 className="text-xs font-bold uppercase tracking-widest mb-6">{editingAccount ? '编辑账户' : '新增账户'}</h2>
             <form onSubmit={handleSaveAccount} className="space-y-4">
               <input type="text" value={accName} onChange={e => setAccName(e.target.value)} required placeholder="账户名称" className="w-full border-b py-2 text-sm outline-none" />
+              <input type="text" value={accNote} onChange={e => setAccNote(e.target.value)} placeholder="备注 (选填)" className="w-full border-b py-2 text-xs outline-none text-[#666]" />
               <div className="flex items-baseline border-b py-1"><span className="text-xs text-[#ccc] mr-1">¥</span><input type="number" step="0.01" value={accInitialBalance} onChange={e => setAccInitialBalance(e.target.value)} className="w-full text-lg font-mono outline-none" /></div>
               <select value={accType} onChange={e => setAccType(e.target.value)} className="w-full border-b py-2 text-sm">
                    {accountTypes.map(t => <option key={t} value={t}>{t}</option>)}
@@ -1078,6 +1153,61 @@ const App: React.FC = () => {
               <div className="flex flex-wrap gap-2 pt-1">{PRESET_COLORS.map(c => (<button key={c} type="button" onClick={() => setAccColor(c)} className={`w-6 h-6 rounded-full border-2 transition-all ${accColor === c ? 'border-[#333] scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div>
               <button type="submit" className="w-full py-4 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-[0.3em] shadow-lg">确认保存</button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 预算管理弹窗 */}
+      {isBudgetModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsBudgetModalOpen(false)}>
+          <div className="bg-white w-full max-w-lg rounded shadow-2xl flex flex-col h-[80vh]" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b flex justify-between items-center"><h2 className="text-xs font-bold uppercase tracking-widest">预算编排与排序</h2><button onClick={() => setIsBudgetModalOpen(false)}><X size={24} className="text-[#ccc]" /></button></div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#f4f1ea]/20 custom-scrollbar">
+              {categories.map((cat, index) => {
+                const b = budgets.find(x => x.category === cat.name);
+                const isExp = expandedBudgetCategory === cat.name;
+                return (
+                  <div key={cat.id} className="border rounded bg-white overflow-hidden shadow-sm">
+                    <div className="p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3 cursor-pointer flex-1" onClick={() => setExpandedBudgetCategory(isExp ? null : cat.name)}>
+                        <div className="w-8 h-8 rounded border flex items-center justify-center text-white" style={{ backgroundColor: cat.color }}>{getIcon(cat.icon, 'w-4 h-4')}</div>
+                        <span className="text-xs font-bold">{cat.name}</span>
+                        <ChevronDown size={14} className={`transition-transform duration-300 ${isExp ? 'rotate-180' : ''}`} />
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="flex flex-col">
+                           <button onClick={(e) => { e.stopPropagation(); handleMoveCategory(index, 'up'); }} className="p-0.5 text-[#ccc] hover:text-[#7d513d] disabled:opacity-10" disabled={index === 0}><ChevronUp size={14} /></button>
+                           <button onClick={(e) => { e.stopPropagation(); handleMoveCategory(index, 'down'); }} className="p-0.5 text-[#ccc] hover:text-[#7d513d] disabled:opacity-10" disabled={index === categories.length - 1}><ChevronDown size={14} /></button>
+                        </div>
+                        <div className="text-right min-w-[60px]"><p className="text-[10px] font-mono font-bold">¥{(b?.limit || 0).toLocaleString()}</p></div>
+                      </div>
+                    </div>
+                    {isExp && (
+                      <div className="p-4 bg-[#fafafa] border-t border-[#f0eee8] animate-in slide-in-from-top duration-300 grid grid-cols-1 gap-4">
+                        <div className="flex items-baseline gap-1 border-b pb-1">
+                            <span className="text-[10px] text-[#999] w-12">日预算</span>
+                            <span className="text-[10px] text-[#ccc]">¥</span>
+                            <input type="number" className="w-full text-xs font-mono font-bold outline-none bg-transparent" value={b?.dailyLimit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'dailyLimit', Number(e.target.value))} placeholder="可选" />
+                        </div>
+                        <div className="flex items-baseline gap-1 border-b pb-1">
+                            <span className="text-[10px] text-[#7d513d] font-bold w-12">月预算</span>
+                            <span className="text-[10px] text-[#ccc]">¥</span>
+                            <input type="number" className="w-full text-xs font-mono font-bold outline-none bg-transparent" value={b?.limit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'limit', Number(e.target.value))} placeholder="0" />
+                        </div>
+                        <div className="flex items-baseline gap-1 border-b pb-1">
+                            <span className="text-[10px] text-[#999] w-12">年预算</span>
+                            <span className="text-[10px] text-[#ccc]">¥</span>
+                            <input type="number" className="w-full text-xs font-mono font-bold outline-none bg-transparent" value={b?.yearlyLimit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'yearlyLimit', Number(e.target.value))} placeholder="可选" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="p-4 border-t flex justify-end">
+                <button onClick={() => setIsBudgetModalOpen(false)} className="px-8 py-3 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-widest">保存退出</button>
+            </div>
           </div>
         </div>
       )}

@@ -7,6 +7,7 @@ export interface Account {
   type: string;
   initialBalance: number;
   color: string;
+  note?: string; // 账户备注
   isLiability?: boolean;
   debtAmount?: number; // 负债总额
   repaymentMonths?: number;
