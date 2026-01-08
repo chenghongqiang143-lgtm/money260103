@@ -7,7 +7,7 @@ import {
   Pencil, RefreshCw, BarChart as BarChartIcon, List, 
   Calendar as CalendarIcon, AlertCircle, Target, Tag,
   Save, FileUp, Search, Layers, Download, Upload, Trash,
-  ArrowRight
+  ArrowRight, Copy, Clipboard
 } from 'lucide-react';
 import { Transaction, Budget, CategoryInfo, Account } from './types';
 import { CATEGORIES as INITIAL_CATEGORIES, getIcon } from './constants';
@@ -29,7 +29,15 @@ const DEFAULT_ACCOUNTS: Account[] = [
 ];
 
 const DEFAULT_ACCOUNT_TYPES = ['现金', '第三方支付', '银行储蓄', '信用卡/负债', '理财/投资'];
-const PRESET_COLORS = ['#7d513d', '#1677ff', '#07c160', '#333333', '#e11d48', '#7c3aed', '#ea580c', '#0891b2', '#4b5563', '#f97316', '#ec4899', '#6366f1'];
+const PRESET_COLORS = [
+  '#7d513d', '#1677ff', '#07c160', '#333333', '#e11d48', '#7c3aed', 
+  '#ea580c', '#0891b2', '#4b5563', '#f97316', '#ec4899', '#6366f1',
+  '#84cc16', '#14b8a6', '#f59e0b', '#8b5cf6', '#d946ef', '#f43f5e',
+  '#64748b', '#78716c', '#a8a29e', '#0f172a', '#1e293b', '#fbbf24',
+  '#dc2626', '#ea580c', '#d97706', '#ca8a04', '#65a30d', '#16a34a',
+  '#059669', '#0d9488', '#0891b2', '#0284c7', '#2563eb', '#4f46e5',
+  '#7c3aed', '#9333ea', '#c026d3', '#db2777', '#e11d48', '#57534e'
+];
 
 const CHART_COLORS = ['#7d513d', '#1677ff', '#07c160', '#e11d48', '#7c3aed', '#ea580c', '#0891b2', '#4b5563', '#94a3b8', '#10b981', '#333333'];
 
@@ -118,6 +126,10 @@ const App: React.FC = () => {
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false);
   const [isCategoryListExpanded, setIsCategoryListExpanded] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryInfo | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [backupText, setBackupText] = useState('');
   
   const [confirmDeleteTxId, setConfirmDeleteTxId] = useState<string | null>(null);
   const [confirmDeleteAccId, setConfirmDeleteAccId] = useState<string | null>(null);
@@ -508,25 +520,23 @@ const App: React.FC = () => {
 
   const handleExportData = () => {
     const data = { transactions, budgets, accounts, categories, settings: { enableAccountLinking, enableBudgetAccumulation, enableExcessDeduction }, exportDate: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url; link.download = `ZenBudget_Backup.json`;
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
-    
-    // Notify user about the location
-    setTimeout(() => {
-        alert("备份文件下载已开始。\n\n请查看您浏览器的默认“下载”文件夹。\n(通常为 Downloads 目录)");
-    }, 500);
+    const jsonString = JSON.stringify(data, null, 2);
+    setBackupText(jsonString);
+    setIsBackupModalOpen(true);
+  };
+  
+  const copyBackupToClipboard = () => {
+    navigator.clipboard.writeText(backupText).then(() => {
+        alert("备份数据已复制到剪贴板！\n\n您可以将其粘贴到安全的地方保存。");
+    }).catch(err => {
+        console.error('Copy failed', err);
+        alert("复制失败，请手动选择文本框内容并复制。");
+    });
   };
 
-  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
+  const handlePasteRestore = () => {
       try {
-        const data = JSON.parse(event.target?.result as string);
+        const data = JSON.parse(importText);
         if (data.transactions) setTransactions(data.transactions);
         if (data.budgets) setBudgets(data.budgets);
         if (data.accounts) setAccounts(data.accounts);
@@ -536,10 +546,12 @@ const App: React.FC = () => {
           setEnableBudgetAccumulation(data.settings.enableBudgetAccumulation || false);
           setEnableExcessDeduction(data.settings.enableExcessDeduction || false);
         }
-        alert('导入成功！');
-      } catch (err) { alert('导入失败，文件格式不正确。'); }
-    };
-    reader.readAsText(file);
+        setIsImportModalOpen(false);
+        setImportText('');
+        alert('数据恢复成功！');
+      } catch (err) { 
+          alert('恢复失败：数据格式不正确。请确保您粘贴的是完整的备份 JSON 内容。'); 
+      }
   };
 
   const handleClearAllData = () => {
@@ -736,7 +748,7 @@ const App: React.FC = () => {
               <div className="absolute top-[-20px] right-[-20px] opacity-10 pointer-events-none rotate-12"><Wallet size={180} /></div>
               <div className="z-10">
                 <p className="text-[10px] font-bold uppercase opacity-60 mb-2 tracking-[0.4em]">净资产汇总 (结余)</p>
-                <h2 className="text-5xl font-light tracking-tight flex items-baseline"><span className="text-2xl mr-2 opacity-50">¥</span>{totalAssets.toLocaleString()}</h2>
+                <h2 className="text-4xl font-light tracking-tight flex items-baseline"><span className="text-2xl mr-2 opacity-50">¥</span>{totalAssets.toLocaleString()}</h2>
               </div>
               <div className="flex justify-end gap-3 z-10 w-full">
                 <button onClick={() => setIsAccountManagerOpen(true)} className="bg-white/15 text-white px-4 py-2 rounded text-[10px] font-bold uppercase flex items-center gap-2 hover:bg-white/25 border border-white/10 backdrop-blur-sm"><List size={14} /> 账户管理</button>
@@ -828,15 +840,14 @@ const App: React.FC = () => {
               <div className="p-4 bg-[#f9f9f9] border-b border-[#e0ddd5] flex items-center gap-2"><RefreshCw size={14} className="text-[#7d513d]" /><h3 className="text-xs font-bold text-[#333] uppercase tracking-widest">数据管理</h3></div>
               <div className="divide-y divide-[#f0eee8]">
                 <div className="p-6 flex items-center justify-between">
-                  <div><p className="text-sm font-bold text-[#333]">数据备份</p><p className="text-[10px] text-[#999] mt-1">导出 JSON 格式备份文件到本地</p></div>
-                  <button onClick={handleExportData} className="px-4 py-2 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm"><Download size={14} /> 备份</button>
+                  <div><p className="text-sm font-bold text-[#333]">数据备份</p><p className="text-[10px] text-[#999] mt-1">复制所有数据到剪贴板</p></div>
+                  <button onClick={handleExportData} className="px-4 py-2 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm"><Copy size={14} /> 复制备份</button>
                 </div>
                 <div className="p-6 flex items-center justify-between">
-                  <div><p className="text-sm font-bold text-[#333]">数据恢复</p><p className="text-[10px] text-[#999] mt-1">从备份文件恢复所有数据 (会覆盖当前数据)</p></div>
-                  <label className="px-4 py-2 bg-white border border-[#7d513d] text-[#7d513d] rounded text-[10px] font-bold uppercase flex items-center gap-2 cursor-pointer hover:bg-[#7d513d]/5 transition-colors">
-                    <Upload size={14} /> 恢复
-                    <input type="file" accept=".json" onChange={handleImportData} className="hidden" />
-                  </label>
+                  <div><p className="text-sm font-bold text-[#333]">数据恢复</p><p className="text-[10px] text-[#999] mt-1">粘贴备份数据进行恢复 (覆盖当前数据)</p></div>
+                  <button onClick={() => setIsImportModalOpen(true)} className="px-4 py-2 bg-white border border-[#7d513d] text-[#7d513d] rounded text-[10px] font-bold uppercase flex items-center gap-2 cursor-pointer hover:bg-[#7d513d]/5 transition-colors">
+                    <Clipboard size={14} /> 粘贴恢复
+                  </button>
                 </div>
                 <div className="p-6 flex items-center justify-between bg-red-50/20">
                     <div><p className="text-sm font-bold text-[#b94a48]">清空数据</p><p className="text-[10px] text-[#999] mt-1">彻底清除所有交易、账户和预算设置</p></div>
@@ -858,6 +869,43 @@ const App: React.FC = () => {
       </nav>
 
       {/* --- 弹窗层 --- */}
+
+      {/* 备份复制弹窗 */}
+      {isBackupModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setIsBackupModalOpen(false)}>
+          <div className="bg-white w-full max-w-sm rounded border border-[#e0ddd5] shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+             <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-[#333]">复制备份数据</h2>
+                <button onClick={() => setIsBackupModalOpen(false)}><X size={24} className="text-[#ccc]" /></button>
+             </div>
+             <textarea 
+               readOnly
+               value={backupText}
+               className="w-full h-40 p-2 border border-[#e0ddd5] rounded text-[10px] font-mono text-[#333] bg-[#fafafa] outline-none resize-none mb-4 custom-scrollbar"
+             />
+             <button onClick={copyBackupToClipboard} className="w-full py-3 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-widest shadow-lg">复制到剪贴板</button>
+          </div>
+        </div>
+      )}
+
+      {/* 数据恢复弹窗 */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={() => setIsImportModalOpen(false)}>
+          <div className="bg-white w-full max-w-sm rounded border border-[#e0ddd5] shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+             <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-[#333]">粘贴备份数据</h2>
+                <button onClick={() => setIsImportModalOpen(false)}><X size={24} className="text-[#ccc]" /></button>
+             </div>
+             <textarea 
+               value={importText}
+               onChange={e => setImportText(e.target.value)}
+               placeholder="请在此处粘贴 JSON 备份内容..."
+               className="w-full h-40 p-2 border border-[#e0ddd5] rounded text-[10px] font-mono text-[#333] bg-[#fafafa] outline-none resize-none mb-4 custom-scrollbar"
+             />
+             <button onClick={handlePasteRestore} className="w-full py-3 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-widest shadow-lg">确认恢复</button>
+          </div>
+        </div>
+      )}
 
       {/* 清空数据确认弹窗 */}
       {confirmClearData && (
@@ -970,76 +1018,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* 历史明细弹窗 */}
-      {isHistoryVisible && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsHistoryVisible(false)}>
-          <div className="bg-white w-full max-w-2xl rounded shadow-2xl flex flex-col h-[80vh]" onClick={e => e.stopPropagation()}>
-            <div className="p-6 border-b flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                    <h2 className="text-sm font-bold uppercase tracking-widest">流水历史</h2>
-                    <div className="relative"><Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#ccc]" /><input type="text" placeholder="搜索备注..." value={historySearch} onChange={e => setHistorySearch(e.target.value)} className="pl-7 pr-2 py-1 bg-[#f0eee8] rounded text-[10px] outline-none w-32 md:w-48" /></div>
-                </div>
-                <button onClick={() => setIsHistoryVisible(false)}><X size={24} className="text-[#ccc]" /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-              {transactions
-                .filter(t => (t.note || '').toLowerCase().includes(historySearch.toLowerCase()) || (t.category || '').toLowerCase().includes(historySearch.toLowerCase()))
-                .map(t => (
-                  <div key={t.id} className="flex items-center justify-between p-3 border-b border-[#f0eee8] hover:bg-[#fafafa]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded border border-[#e0ddd5] flex items-center justify-center text-white bg-white" style={{ backgroundColor: categories.find(c => c.name === t.category)?.color || '#9ca3af' }}>
-                          {getIcon(categories.find(c => c.name === t.category)?.icon || 'MoreHorizontal', 'w-4 h-4')}
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold">{t.category}</p>
-                        <p className="text-[9px] text-[#999]">{t.date.split('T')[0]} {t.note}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <p className={`text-sm font-mono font-bold ${t.type === 'income' ? 'text-[#468847]' : 'text-[#333]'}`}>{t.type === 'income' ? '+' : '-'}¥{t.amount.toLocaleString()}</p>
-                      <button onClick={() => setTransactions(transactions.filter(tx => tx.id !== t.id))} className="text-[#ccc] hover:text-[#b94a48]"><Trash2 size={14} /></button>
-                    </div>
-                  </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 新增流水弹窗 */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
-          <div className="bg-[#fafafa] w-full max-sm:w-[95%] max-w-sm rounded border border-[#e0ddd5] shadow-2xl p-4" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4"><h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#333]">记一笔</h2><button onClick={() => setIsModalOpen(false)}><X size={20} className="text-[#ccc]" /></button></div>
-            <form onSubmit={handleAddTransaction} className="space-y-4">
-              <div className="flex p-1 bg-[#f0eee8] rounded border border-[#e0ddd5]">
-                <button type="button" onClick={() => setType('expense')} className={`flex-1 py-1 rounded text-[9px] font-bold uppercase ${type === 'expense' ? 'bg-white text-[#333]' : 'text-[#999]'}`}>支出</button>
-                <button type="button" onClick={() => setType('income')} className={`flex-1 py-1 rounded text-[9px] font-bold uppercase ${type === 'income' ? 'bg-white text-[#468847]' : 'text-[#999]'}`}>收入</button>
-              </div>
-              <div className="border-b border-[#e0ddd5] pb-1.5 flex items-baseline"><span className="text-[#ccc] text-base mr-1.5">¥</span><input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" autoFocus className="bg-transparent text-3xl font-light w-full outline-none font-mono" /></div>
-              <div className="grid grid-cols-2 gap-4">
-                <input type="date" value={transactionDate} onChange={(e) => setTransactionDate(e.target.value)} className="w-full bg-[#f0eee8] border border-[#e0ddd5] px-2 py-1.5 rounded text-[10px] font-mono font-bold text-[#333] outline-none" />
-                <select value={selectedAccountId} onChange={(e) => setSelectedAccountId(e.target.value)} className="w-full bg-[#f0eee8] border border-[#e0ddd5] px-2 py-1.5 rounded text-[10px] font-bold text-[#333] outline-none">
-                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <div className="grid grid-cols-5 gap-1.5 max-h-40 overflow-y-auto custom-scrollbar">
-                    {categories.map((cat: CategoryInfo) => (
-                        <button key={cat.id} type="button" onClick={() => setCategoryName(cat.name)} className={`py-1.5 rounded border flex flex-col items-center gap-1 transition-all ${categoryName === cat.name ? 'border-[#7d513d] bg-[#fdfaf5]' : 'border-transparent opacity-60'}`}>
-                            <div className="w-8 h-8 border rounded flex items-center justify-center bg-white text-white" style={{ backgroundColor: cat.color }}>{getIcon(cat.icon, 'w-3.5 h-3.5')}</div>
-                            <span className="text-[7px] font-bold truncate w-full text-center uppercase">{cat.name}</span>
-                        </button>
-                    ))}
-                </div>
-              </div>
-              <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="写点什么..." className="w-full border-b border-[#e0ddd5] py-1.5 text-xs outline-none bg-transparent" />
-              <button type="submit" className="w-full py-3 bg-[#7d513d] text-white rounded text-[9px] font-bold uppercase tracking-[0.3em] shadow-lg">保存</button>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* 账户排序管理弹窗 */}
       {isAccountManagerOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsAccountManagerOpen(false)}>
@@ -1052,6 +1030,9 @@ const App: React.FC = () => {
                     <div className="flex flex-col">
                         <button onClick={() => handleMoveAccount(index, 'up')} className="p-0.5 text-[#ccc] hover:text-[#7d513d] disabled:opacity-20" disabled={index === 0}><ChevronUp size={12} /></button>
                         <button onClick={() => handleMoveAccount(index, 'down')} className="p-0.5 text-[#ccc] hover:text-[#7d513d] disabled:opacity-20" disabled={index === accounts.length - 1}><ChevronDown size={12} /></button>
+                    </div>
+                    <div className="w-8 h-8 rounded border flex items-center justify-center text-white" style={{ backgroundColor: acc.color }}>
+                        {React.cloneElement(getAccountIcon(acc.type, acc.isLiability, acc.isSavings) as React.ReactElement, { size: 14 })}
                     </div>
                     <p className="text-xs font-bold">{acc.name}</p>
                   </div>
@@ -1097,61 +1078,6 @@ const App: React.FC = () => {
               <div className="flex flex-wrap gap-2 pt-1">{PRESET_COLORS.map(c => (<button key={c} type="button" onClick={() => setAccColor(c)} className={`w-6 h-6 rounded-full border-2 transition-all ${accColor === c ? 'border-[#333] scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />))}</div>
               <button type="submit" className="w-full py-4 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-[0.3em] shadow-lg">确认保存</button>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* 预算管理弹窗 */}
-      {isBudgetModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setIsBudgetModalOpen(false)}>
-          <div className="bg-white w-full max-w-lg rounded shadow-2xl flex flex-col h-[80vh]" onClick={e => e.stopPropagation()}>
-            <div className="p-6 border-b flex justify-between items-center"><h2 className="text-xs font-bold uppercase tracking-widest">预算编排与排序</h2><button onClick={() => setIsBudgetModalOpen(false)}><X size={24} className="text-[#ccc]" /></button></div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#f4f1ea]/20 custom-scrollbar">
-              {categories.map((cat, index) => {
-                const b = budgets.find(x => x.category === cat.name);
-                const isExp = expandedBudgetCategory === cat.name;
-                return (
-                  <div key={cat.id} className="border rounded bg-white overflow-hidden shadow-sm">
-                    <div className="p-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3 cursor-pointer flex-1" onClick={() => setExpandedBudgetCategory(isExp ? null : cat.name)}>
-                        <div className="w-8 h-8 rounded border flex items-center justify-center text-white" style={{ backgroundColor: cat.color }}>{getIcon(cat.icon, 'w-4 h-4')}</div>
-                        <span className="text-xs font-bold">{cat.name}</span>
-                        <ChevronDown size={14} className={`transition-transform duration-300 ${isExp ? 'rotate-180' : ''}`} />
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="flex flex-col">
-                           <button onClick={(e) => { e.stopPropagation(); handleMoveCategory(index, 'up'); }} className="p-0.5 text-[#ccc] hover:text-[#7d513d] disabled:opacity-10" disabled={index === 0}><ChevronUp size={14} /></button>
-                           <button onClick={(e) => { e.stopPropagation(); handleMoveCategory(index, 'down'); }} className="p-0.5 text-[#ccc] hover:text-[#7d513d] disabled:opacity-10" disabled={index === categories.length - 1}><ChevronDown size={14} /></button>
-                        </div>
-                        <div className="text-right min-w-[60px]"><p className="text-[10px] font-mono font-bold">¥{(b?.limit || 0).toLocaleString()}</p></div>
-                      </div>
-                    </div>
-                    {isExp && (
-                      <div className="p-4 bg-[#fafafa] border-t border-[#f0eee8] animate-in slide-in-from-top duration-300 grid grid-cols-1 gap-4">
-                        <div className="flex items-baseline gap-1 border-b pb-1">
-                            <span className="text-[10px] text-[#999] w-12">日预算</span>
-                            <span className="text-[10px] text-[#ccc]">¥</span>
-                            <input type="number" className="w-full text-xs font-mono font-bold outline-none bg-transparent" value={b?.dailyLimit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'dailyLimit', Number(e.target.value))} placeholder="可选" />
-                        </div>
-                        <div className="flex items-baseline gap-1 border-b pb-1">
-                            <span className="text-[10px] text-[#7d513d] font-bold w-12">月预算</span>
-                            <span className="text-[10px] text-[#ccc]">¥</span>
-                            <input type="number" className="w-full text-xs font-mono font-bold outline-none bg-transparent" value={b?.limit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'limit', Number(e.target.value))} placeholder="0" />
-                        </div>
-                        <div className="flex items-baseline gap-1 border-b pb-1">
-                            <span className="text-[10px] text-[#999] w-12">年预算</span>
-                            <span className="text-[10px] text-[#ccc]">¥</span>
-                            <input type="number" className="w-full text-xs font-mono font-bold outline-none bg-transparent" value={b?.yearlyLimit || ''} onChange={(e) => handleUpdateBudget(cat.name, 'yearlyLimit', Number(e.target.value))} placeholder="可选" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="p-4 border-t flex justify-end">
-                <button onClick={() => setIsBudgetModalOpen(false)} className="px-8 py-3 bg-[#7d513d] text-white rounded text-[10px] font-bold uppercase tracking-widest">保存退出</button>
-            </div>
           </div>
         </div>
       )}
